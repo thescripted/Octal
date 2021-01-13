@@ -29,7 +29,7 @@ func TestExecute(t *testing.T) {
 func TestLoadProgram(t *testing.T) {
 	chip := new(Chip8)
 	chip.Init()
-	chip.LoadProgram()
+	chip.LoadProgram("in.oct")
 	chip.Decode()
 	if chip.inst != 0xA2F0 {
 		t.Errorf("Got %#x, expected 0xA2F0", chip.inst)

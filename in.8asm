@@ -1,0 +1,3 @@
+ADD  v1 0x0
+ADD  v1 0xab
+STOR v1

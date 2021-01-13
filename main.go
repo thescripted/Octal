@@ -29,8 +29,8 @@ type Chip8 struct {
 */
 
 // LoadProgram loads the program from a file into the Chip8's memory.
-func (c *Chip8) LoadProgram() {
-	progFile, err := os.Open("in.oct")
+func (c *Chip8) LoadProgram(prog string) {
+	progFile, err := os.Open(prog)
 	if err != nil {
 		panic(err)
 	}
@@ -61,6 +61,13 @@ func (c *Chip8) Decode() {
 func topNibble(i uint16) uint16 {
 	return (i & 0xF000) >> 12
 }
+func bottomNibble(i uint16) uint16 {
+	return (i & 0x000F)
+}
+
+func targetAddr(i uint16) uint16 {
+	return (i & 0x0FFF)
+}
 
 // SetIndex sets the index register if current inst is ANNN
 func (c *Chip8) SetIndex() {
@@ -70,10 +77,27 @@ func (c *Chip8) SetIndex() {
 // Execute executes a single instruction.
 func (c *Chip8) Execute() {
 	c.Decode()
+	if c.inst == 0xFFFF {
+		fmt.Println("End of program")
+		os.Exit(0)
+	}
 	top := topNibble(c.inst)
 	switch top {
 	case 0xA:
+		fmt.Println("0xA")
 		c.SetIndex()
+	case 0x0:
+		switch bottomNibble(c.inst) {
+		case 0x0:
+			fmt.Println("clear screen")
+			break
+		case 0xE:
+			fmt.Println("ret")
+		}
+	case 0x1:
+		fmt.Printf("jump: %#x\n", targetAddr(c.inst))
+	case 0x2:
+		fmt.Printf("call sub at: %#x\n", targetAddr(c.inst))
 	}
 
 	c.pc += 2
@@ -81,5 +105,11 @@ func (c *Chip8) Execute() {
 }
 
 func main() {
-	fmt.Println("Hi from chip8")
+	chip := new(Chip8)
+	chip.Init()
+	// chip.LoadProgram("in.oct")
+	chip.LoadProgram("../hapax8asm/test.bin")
+	for {
+		chip.Execute()
+	}
 }
