@@ -1,8 +1,10 @@
 package main
 
-import "fmt"
-import "math/bits"
-import "os"
+import (
+	"fmt"
+	"math/bits"
+	"os"
+)
 
 //
 const progStart = 0x200
@@ -58,6 +60,10 @@ func (c *Chip8) Decode() {
 	c.inst = topByte | bottomByte
 }
 
+func (c *Chip8) ToString() string {
+	return fmt.Sprintf("Chip State:\n\tinst: %#x\n\tindex: %#x\n\tpc: %#x\n\tsp: %d\n\t", c.inst, c.index, c.pc, c.sp)
+}
+
 func topNibble(i uint16) uint16 {
 	return (i & 0xF000) >> 12
 }
@@ -74,33 +80,41 @@ func (c *Chip8) SetIndex() {
 	c.index = c.inst & 0x0FFF
 }
 
+// SetPC sets the PC register to the given address
+func (c *Chip8) SetPC(newaddr uint16) {
+	c.pc = newaddr
+}
+
+// IncPC increments the PC (adds 2 since the word is a short)
+func (c *Chip8) IncPC() {
+	c.pc += 2
+}
+
 // Execute executes a single instruction.
 func (c *Chip8) Execute() {
 	c.Decode()
-	if c.inst == 0xFFFF {
-		fmt.Println("End of program")
+	fmt.Println(c.ToString())
+	if c.inst == 0x0 {
 		os.Exit(0)
 	}
 	top := topNibble(c.inst)
 	switch top {
 	case 0xA:
-		fmt.Println("0xA")
 		c.SetIndex()
+		c.IncPC()
 	case 0x0:
 		switch bottomNibble(c.inst) {
 		case 0x0:
 			fmt.Println("clear screen")
-			break
 		case 0xE:
 			fmt.Println("ret")
 		}
+		c.IncPC()
 	case 0x1:
-		fmt.Printf("jump: %#x\n", targetAddr(c.inst))
+		c.SetPC(targetAddr(c.inst))
 	case 0x2:
-		fmt.Printf("call sub at: %#x\n", targetAddr(c.inst))
+		c.SetPC(targetAddr(c.inst))
 	}
-
-	c.pc += 2
 
 }
 
@@ -108,7 +122,7 @@ func main() {
 	chip := new(Chip8)
 	chip.Init()
 	// chip.LoadProgram("in.oct")
-	chip.LoadProgram("../hapax8asm/test.bin")
+	chip.LoadProgram("./out.bin")
 	for {
 		chip.Execute()
 	}
