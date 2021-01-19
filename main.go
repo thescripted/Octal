@@ -90,6 +90,21 @@ func (c *Chip8) IncPC() {
 	c.pc += 2
 }
 
+func (c *Chip8) GetImm(numDigs int) uint16 {
+	switch numDigs {
+	case 2:
+		return c.inst & 0x00FF
+	case 3:
+		return c.inst & 0x0FFF
+	default:
+		panic("bad arg")
+	}
+}
+
+func (c *Chip8) GetSReg() uint16 {
+	return c.inst & 0x0F00
+}
+
 // Execute executes a single instruction.
 func (c *Chip8) Execute() {
 	c.Decode()
@@ -110,10 +125,19 @@ func (c *Chip8) Execute() {
 			fmt.Println("ret")
 		}
 		c.IncPC()
+	// JUMP
 	case 0x1:
 		c.SetPC(targetAddr(c.inst))
+	// CALL
 	case 0x2:
 		c.SetPC(targetAddr(c.inst))
+	case 0x3:
+		imm := uint8(c.GetImm(2))
+		regNum := c.GetSReg()
+		c.IncPC()
+		if imm == c.v[regNum] {
+			c.IncPC() // skip inst
+		}
 	}
 
 }
