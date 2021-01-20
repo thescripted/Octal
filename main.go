@@ -90,19 +90,55 @@ func (c *Chip8) IncPC() {
 	c.pc += 2
 }
 
-func (c *Chip8) GetImm(numDigs int) uint16 {
+func (c *Chip8) GetImm(numDigs int) uint8 {
 	switch numDigs {
 	case 2:
-		return c.inst & 0x00FF
+		return uint8(c.inst & 0x00FF)
 	case 3:
-		return c.inst & 0x0FFF
+		return uint8(c.inst & 0x0FFF)
 	default:
 		panic("bad arg")
 	}
 }
 
-func (c *Chip8) GetSReg() uint16 {
+func (c *Chip8) GetXReg() uint16 {
 	return c.inst & 0x0F00
+}
+
+func (c *Chip8) GetYReg() uint16 {
+	return c.inst & 0x00F0
+}
+
+// Math8 executes the correct math instruction based on the bottom nibble of an inst starting with 0x8.
+func (c *Chip8) Math8() {
+	x := c.GetXReg()
+	y := c.GetYReg()
+	xVal := c.v[x]
+	yVal := c.v[y]
+	switch bottomNibble(c.inst) {
+	case 0x0:
+		c.v[x] = yVal
+	case 0x1:
+		c.v[x] = xVal | yVal
+	case 0x2:
+		c.v[x] = xVal & yVal
+	case 0x3:
+		c.v[x] = xVal ^ yVal
+	case 0x4:
+		add := xVal + yVal
+		if add > 255 {
+			c.v[0xF] = 1
+		}
+		c.v[x] = uint8(add & 0xFF)
+	case 0x5:
+		c.v[x] = xVal - yVal
+	case 0x6:
+		c.v[x] = xVal >> 1
+	case 0x7:
+		c.v[x] = yVal - xVal
+	case 0xE:
+		c.v[x] = xVal << 1
+	}
 }
 
 // Execute executes a single instruction.
@@ -132,12 +168,47 @@ func (c *Chip8) Execute() {
 	case 0x2:
 		c.SetPC(targetAddr(c.inst))
 	case 0x3:
-		imm := uint8(c.GetImm(2))
-		regNum := c.GetSReg()
+		imm := c.GetImm(2)
+		regNum := c.GetXReg()
 		c.IncPC()
 		if imm == c.v[regNum] {
 			c.IncPC() // skip inst
 		}
+	case 0x4:
+		imm := c.GetImm(2)
+		regNum := c.GetXReg()
+		c.IncPC()
+		if imm != c.v[regNum] {
+			c.IncPC()
+		}
+	case 0x5:
+		x := c.GetXReg()
+		y := c.GetYReg()
+		c.IncPC()
+		if c.v[x] == c.v[y] {
+			c.IncPC()
+		}
+	case 0x6:
+		x := c.GetXReg()
+		imm := c.GetImm(2)
+		c.v[x] = imm
+		c.IncPC()
+	case 0x7:
+		x := c.GetXReg()
+		imm := c.GetImm(2)
+		c.v[x] += imm
+
+	case 0x8:
+		c.Math8()
+		c.IncPC()
+	case 0x9:
+		x := c.GetXReg()
+		y := c.GetYReg()
+		c.IncPC()
+		if c.v[x] != c.v[y] {
+			c.IncPC()
+		}
+
 	}
 
 }
