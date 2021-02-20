@@ -1,3 +1,3 @@
-module github.com/jahzielv/hapax8
+module github.com/thescripted/hapax8
 
-go 1.14
+go 1.15
