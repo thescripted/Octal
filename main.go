@@ -6,7 +6,6 @@ import (
 	"github.com/thescripted/hapax8/chip8"
 )
 
-// main: A CLI tool to initialize the chip-8 emulator and a menu-selection.
 func main() {
 	chip := chip8.New()
 	chip.LoadProgram("./out.bin")
