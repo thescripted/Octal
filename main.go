@@ -2,6 +2,7 @@ package main
 
 import (
 	"fmt"
+	"os"
 	"time"
 
 	"github.com/faiface/pixel"
@@ -13,7 +14,11 @@ import (
 
 func run() { // callback function to our "main" routine
 	chip := chip8.New()
-	chip.LoadProgram("./IBM Logo.ch8")
+	if err := chip.LoadProgram("./IBM Logo.ch8"); err != nil { // load from CLI
+		fmt.Println("Error:", err)
+		os.Exit(1)
+	}
+
 	drawSig := make(chan int)
 	errSig := make(chan error)
 	go chip.Run(drawSig, errSig)
@@ -46,7 +51,6 @@ func run() { // callback function to our "main" routine
 			win.SetTitle(fmt.Sprintf("%s | FPS: %d", cfg.Title, frames))
 			frames = 0
 		case <-drawSig: // Draw Capture
-			fmt.Println("Draw")
 			imd.Clear()
 			idx := 0
 			for y := win.Bounds().Max.Y; y > win.Bounds().Min.Y; y -= 320 / 32 {
@@ -66,11 +70,10 @@ func run() { // callback function to our "main" routine
 		}
 
 		if win.JustPressed(pixelgl.KeyK) {
-			win.Clear(colornames.Aliceblue)
+			fmt.Println("Pressed key K")
 		}
 		if win.JustPressed(pixelgl.KeyJ) {
 			fmt.Println("Pressed key J")
-			win.Clear(colornames.Antiquewhite)
 		}
 		frames++
 		win.Update()

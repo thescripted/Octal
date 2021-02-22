@@ -16,15 +16,15 @@ const (
 
 // Chip8 is our emulated processor state
 type Chip8 struct {
-	memory     []byte   // memory of chip-8 VM
-	registers  []byte   // register block
-	index      uint16   // index reg
-	pc         uint16   // program counter
-	Gfx        []byte   // pixel array for graphics
-	stack      []uint16 // Call Stack
-	sp         byte     // Stack pointer
-	delayTimer byte     // delay timer
-	soundTimer byte     // sound timer
+	memory     []byte // memory of chip-8 VM
+	registers  []byte // register block
+	index      uint16 // index reg
+	pc         uint16 // program counter
+	Gfx        []byte // pixel array for graphics
+	stack      stack  // Call Stack
+	sp         byte   // Stack pointer
+	delayTimer byte   // delay timer
+	soundTimer byte   // sound timer
 }
 
 type opcode struct {
@@ -35,6 +35,8 @@ type opcode struct {
 	lowerByte   uint16
 	memAddress  uint16
 }
+
+type stack []uint16
 
 // ChipRuntimeError catch programmer's generated errors at runtime.
 type ChipRuntimeError struct {
@@ -48,8 +50,19 @@ type ChipLoaderError struct {
 	Err  error
 }
 
-// Updater updates the GUI with the graphics the Chip provides.
-type Updater func(graphics []byte) error
+// Should consider handling runtime error for stack limit here.
+func (s stack) push(v uint16) stack {
+	return append(s, v)
+}
+
+func (s stack) pop() (stack, uint16) {
+	l := len(s)
+	if l <= 0 {
+		// handle runtime error if programmer pops from empty stack.
+	}
+	return s[:l-1], s[l-1]
+
+}
 
 func (e *ChipRuntimeError) Error() string {
 	return fmt.Sprintf("Error at line %d: %s", e.lineno, e.Err.Error())
@@ -70,10 +83,14 @@ func New() *Chip8 {
 
 // Run will run an infinite game loop.
 func (c *Chip8) Run(drawSig chan int, errSig chan error) {
+	ticker := time.NewTicker(time.Second / 60) // 60Hz
+
 	for {
-		// deliberately slow this down to one tick per second.
-		time.Sleep(time.Millisecond * 500) // Should be 60Hz
-		c.emulateCycle(drawSig)
+		select {
+		case <-ticker.C:
+			c.emulateCycle(drawSig)
+		default:
+		}
 	}
 }
 
@@ -103,7 +120,7 @@ func (c *Chip8) initialize() {
 	c.memory = make([]byte, memSize)
 	c.registers = make([]byte, registerSize)
 	c.Gfx = make([]byte, gfxSize)
-	c.stack = make([]uint16, stackSize)
+	c.stack = make(stack, 0) // will need to be considerate of stacksize
 }
 
 // decode reads and parses the first two memory address to use in execution.
@@ -134,13 +151,68 @@ func (c *Chip8) emulateCycle(drawSig chan int) error {
 				c.Gfx[i] = 0
 			}
 			drawSig <- 1 // Draw to Canvas.
+		case 0xEE: // return from call routine
+			c.stack, c.pc = c.stack.pop()
 		}
 	case 0x1000:
 		c.pc = opcode.memAddress
+	case 0x2000:
+		c.stack = c.stack.push(c.pc)
+		c.pc = opcode.memAddress
+	case 0x3000:
+		if c.registers[opcode.second] == byte(opcode.lowerByte) {
+			c.pc += 2
+		}
+	case 0x4000:
+		if c.registers[opcode.second] != byte(opcode.lowerByte) {
+			c.pc += 2
+		}
+	case 0x5000:
+		if c.registers[opcode.second] == c.registers[opcode.third] {
+			c.pc += 2
+		}
 	case 0x6000:
 		c.registers[opcode.second] = byte(opcode.lowerByte)
 	case 0x7000:
 		c.registers[opcode.second] += byte(opcode.lowerByte)
+	case 0x8000:
+		switch opcode.fourth {
+		case 0x0:
+			c.registers[opcode.second] = c.registers[opcode.third]
+		case 0x1:
+			c.registers[opcode.second] |= c.registers[opcode.third]
+		case 0x2:
+			c.registers[opcode.second] &= c.registers[opcode.third]
+		case 0x3:
+			c.registers[opcode.second] ^= c.registers[opcode.third]
+		case 0x4:
+			sum := c.registers[opcode.second] + c.registers[opcode.third]
+			c.registers[0xF] = 0
+			if sum > 0xFF {
+				c.registers[0xF] = 1
+			}
+			c.registers[opcode.second] = sum
+		case 0x5:
+			minuend := c.registers[opcode.second]
+			subtrahend := c.registers[opcode.third]
+			c.registers[0xF] = 0
+			if minuend > subtrahend {
+				c.registers[0xF] = 1
+			}
+			c.registers[opcode.second] = minuend - subtrahend
+		case 0x7:
+			minuend := c.registers[opcode.third]
+			subtrahend := c.registers[opcode.second]
+			c.registers[0xF] = 0
+			if minuend > subtrahend {
+				c.registers[0xF] = 1
+			}
+			c.registers[opcode.second] = minuend - subtrahend
+		}
+	case 0x9000:
+		if c.registers[opcode.second] != c.registers[opcode.third] {
+			c.pc += 2
+		}
 	case 0xA000:
 		c.index = opcode.memAddress
 	case 0xD000: // Draw
