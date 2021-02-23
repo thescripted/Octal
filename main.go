@@ -13,8 +13,29 @@ import (
 )
 
 func run() { // callback function to our "main" routine
+
+	// KeyMap maps the keyboard to a CHIP-8 Key
+	KeyMap := map[pixelgl.Button]uint{
+		pixelgl.KeyX: 0x0,
+		pixelgl.Key1: 0x1,
+		pixelgl.Key2: 0x2,
+		pixelgl.Key3: 0x3,
+		pixelgl.KeyQ: 0x4,
+		pixelgl.KeyW: 0x5,
+		pixelgl.KeyE: 0x6,
+		pixelgl.KeyA: 0x7,
+		pixelgl.KeyS: 0x8,
+		pixelgl.KeyD: 0x9,
+		pixelgl.KeyZ: 0xA,
+		pixelgl.KeyC: 0xB,
+		pixelgl.Key4: 0xC,
+		pixelgl.KeyR: 0xD,
+		pixelgl.KeyF: 0xE,
+		pixelgl.KeyV: 0xF,
+	}
+
 	chip := chip8.New()
-	if err := chip.LoadProgram("./IBM Logo.ch8"); err != nil { // load from CLI
+	if err := chip.LoadProgram("./test_opcode.ch8"); err != nil { // load from CLI
 		fmt.Println("Error:", err)
 		os.Exit(1)
 	}
@@ -23,7 +44,7 @@ func run() { // callback function to our "main" routine
 	errSig := make(chan error)
 	go chip.Run(drawSig, errSig)
 
-	graphics := chip.Gfx
+	graphics := &chip.Gfx
 
 	cfg := pixelgl.WindowConfig{
 		Title:  "GT Sucks!",
@@ -69,12 +90,16 @@ func run() { // callback function to our "main" routine
 		default:
 		}
 
-		if win.JustPressed(pixelgl.KeyK) {
-			fmt.Println("Pressed key K")
+		// independent of Chip-8 Clock speed.
+		for key, val := range KeyMap {
+			if win.JustPressed(key) {
+				chip.PressKey(val)
+			}
+			if win.JustReleased(key) {
+				chip.ReleaseKey(val)
+			}
 		}
-		if win.JustPressed(pixelgl.KeyJ) {
-			fmt.Println("Pressed key J")
-		}
+
 		frames++
 		win.Update()
 	}

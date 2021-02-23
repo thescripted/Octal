@@ -2,74 +2,77 @@ package chip8
 
 import (
 	"fmt"
+	"math/rand"
 	"os"
 	"time"
 )
 
 const (
-	memSize      = 0x1000
-	gfxSize      = 0x800
-	progStart    = 0x200
+	// memSize is the size of the memory in the Chip-8 emulator
+	memSize = 0x1000
+
+	// gfxSize is the size of the graphics card rendered by pixel.
+	gfxSize = 0x800
+
+	// fontStart is where the fontset begins in memory.
+	fontStart = 0x50
+
+	// fontLength is the length of an individual font.
+	fontLength = 0x5
+
+	// progStart is where all Chip-8 ROMs instruction start at in memory.
+	progStart = 0x200
+
+	// registerSize is the size of the Vx register in Chip-8.
 	registerSize = 0x10
-	stackSize    = 0x10
+
+	// stackSize is the size of the call-stack used in Chip-8 call routines.
+	stackSize = 0x10
+)
+
+var (
+	// fontSet is the default font for Chip-8. This is loaded on init.
+	fontSet = [80]byte{
+		0xF0, 0x90, 0x90, 0x90, 0xF0, // 0
+		0x20, 0x60, 0x20, 0x20, 0x70, // 1
+		0xF0, 0x10, 0xF0, 0x80, 0xF0, // 2
+		0xF0, 0x10, 0xF0, 0x10, 0xF0, // 3
+		0x90, 0x90, 0xF0, 0x10, 0x10, // 4
+		0xF0, 0x80, 0xF0, 0x10, 0xF0, // 5
+		0xF0, 0x80, 0xF0, 0x90, 0xF0, // 6
+		0xF0, 0x10, 0x20, 0x40, 0x40, // 7
+		0xF0, 0x90, 0xF0, 0x90, 0xF0, // 8
+		0xF0, 0x90, 0xF0, 0x10, 0xF0, // 9
+		0xF0, 0x90, 0xF0, 0x90, 0x90, // A
+		0xE0, 0x90, 0xE0, 0x90, 0xE0, // B
+		0xF0, 0x80, 0x80, 0x80, 0xF0, // C
+		0xE0, 0x90, 0x90, 0x90, 0xE0, // D
+		0xF0, 0x80, 0xF0, 0x80, 0xF0, // E
+		0xF0, 0x80, 0xF0, 0x80, 0x80, // F
+	}
 )
 
 // Chip8 is our emulated processor state
 type Chip8 struct {
-	memory     []byte // memory of chip-8 VM
-	registers  []byte // register block
-	index      uint16 // index reg
-	pc         uint16 // program counter
-	Gfx        []byte // pixel array for graphics
-	stack      stack  // Call Stack
-	sp         byte   // Stack pointer
-	delayTimer byte   // delay timer
-	soundTimer byte   // sound timer
+	memory     [memSize]byte      // memory of chip-8 VM
+	V          [registerSize]byte // register block
+	index      uint16             // index reg
+	pc         uint16             // program counter
+	Gfx        [gfxSize]byte      // pixel array for graphics
+	stack      [stackSize]uint16  // Call Stack
+	sp         byte               // Stack pointer
+	delayTimer byte               // delay timer
+	soundTimer byte               // sound timer
+	keyset     [16]byte
 }
 
 type opcode struct {
 	instruction uint16
-	second      uint16
-	third       uint16
-	fourth      uint16
+	x           uint16
+	y           uint16
+	n           uint16
 	lowerByte   uint16
-	memAddress  uint16
-}
-
-type stack []uint16
-
-// ChipRuntimeError catch programmer's generated errors at runtime.
-type ChipRuntimeError struct {
-	lineno int
-	Err    error
-}
-
-// ChipLoaderError catch file loading errors.
-type ChipLoaderError struct {
-	file string
-	Err  error
-}
-
-// Should consider handling runtime error for stack limit here.
-func (s stack) push(v uint16) stack {
-	return append(s, v)
-}
-
-func (s stack) pop() (stack, uint16) {
-	l := len(s)
-	if l <= 0 {
-		// handle runtime error if programmer pops from empty stack.
-	}
-	return s[:l-1], s[l-1]
-
-}
-
-func (e *ChipRuntimeError) Error() string {
-	return fmt.Sprintf("Error at line %d: %s", e.lineno, e.Err.Error())
-}
-
-func (e *ChipLoaderError) Error() string {
-	return fmt.Sprintf("Error with %s: %s", e.file, e.Err.Error())
+	address     uint16
 }
 
 // New returns a new instance of a Chip8 VM.
@@ -79,19 +82,6 @@ func New() *Chip8 {
 	// load the fontset.
 
 	return chip
-}
-
-// Run will run an infinite game loop.
-func (c *Chip8) Run(drawSig chan int, errSig chan error) {
-	ticker := time.NewTicker(time.Second / 60) // 60Hz
-
-	for {
-		select {
-		case <-ticker.C:
-			c.emulateCycle(drawSig)
-		default:
-		}
-	}
 }
 
 // LoadProgram loads the program from a file into the Chip8's memory.
@@ -109,6 +99,36 @@ func (c *Chip8) LoadProgram(prog string) error {
 	return nil
 }
 
+// PressKey turns on a key flag.
+func (c *Chip8) PressKey(key uint) {
+	c.keyset[key] = 1
+}
+
+// ReleaseKey turns off a key flag.
+func (c *Chip8) ReleaseKey(key uint) {
+	c.keyset[key] = 0
+}
+
+// Run will run an infinite game loop.
+func (c *Chip8) Run(drawSig chan int, errSig chan error) {
+	ticker := time.NewTicker(time.Second / 60) // 60Hz
+
+	for {
+		select {
+		case <-ticker.C:
+			c.emulateCycle(drawSig)
+			if c.delayTimer > 0 {
+				c.delayTimer--
+			}
+			if c.soundTimer > 0 {
+				c.soundTimer--
+				fmt.Println("Beepin!")
+			}
+		default:
+		}
+	}
+}
+
 // initialize will clear display, stack, registers, and memory.
 // this is used when the emulator begins or is reset with another game.
 func (c *Chip8) initialize() {
@@ -117,31 +137,40 @@ func (c *Chip8) initialize() {
 	c.index = 0
 	c.delayTimer = 0
 	c.soundTimer = 0
-	c.memory = make([]byte, memSize)
-	c.registers = make([]byte, registerSize)
-	c.Gfx = make([]byte, gfxSize)
-	c.stack = make(stack, 0) // will need to be considerate of stacksize
-}
 
-// decode reads and parses the first two memory address to use in execution.
-func decode(current uint16) opcode {
-	parsedOpcode := opcode{
-		instruction: current & 0xF000,
-		second:      current & 0x0F00 >> 8,
-		third:       current & 0x00F0 >> 4,
-		fourth:      current & 0x000F,
-		lowerByte:   current & 0x00FF,
-		memAddress:  current & 0x0FFF,
+	// clear Register.
+	for i := range c.V {
+		c.V[i] = 0
 	}
 
-	return parsedOpcode
-}
+	// clear call stack.
+	for i := range c.stack {
+		c.stack[i] = 0
+	}
 
+	// clear graphics.
+	for i := range c.Gfx {
+		c.Gfx[i] = 0
+	}
+
+	// initialize keyset.
+	for i := range c.keyset {
+		c.keyset[i] = 0
+	}
+
+	// load the fontset into memory. By convention, fontset occupies 0x50-0x9F.
+	for i, font := range fontSet {
+		c.memory[fontStart+i] = font
+	}
+}
 func (c *Chip8) emulateCycle(drawSig chan int) error {
-	// fetch -- find a way to make this neater.
 	currentOpcode := uint16(c.memory[c.pc])<<8 | uint16(c.memory[c.pc+1])
 	opcode := decode(currentOpcode)
 	c.pc += 2
+
+	registerX := &c.V[opcode.x]
+	registerY := &c.V[opcode.y]
+	flagRegister := &c.V[0xF]
 
 	switch opcode.instruction { // exposes the first half-byte in the opcode
 	case 0x0000:
@@ -152,87 +181,248 @@ func (c *Chip8) emulateCycle(drawSig chan int) error {
 			}
 			drawSig <- 1 // Draw to Canvas.
 		case 0xEE: // return from call routine
-			c.stack, c.pc = c.stack.pop()
+			c.pc = c.popRoutine()
 		}
-	case 0x1000:
-		c.pc = opcode.memAddress
-	case 0x2000:
-		c.stack = c.stack.push(c.pc)
-		c.pc = opcode.memAddress
-	case 0x3000:
-		if c.registers[opcode.second] == byte(opcode.lowerByte) {
-			c.pc += 2
-		}
-	case 0x4000:
-		if c.registers[opcode.second] != byte(opcode.lowerByte) {
-			c.pc += 2
-		}
-	case 0x5000:
-		if c.registers[opcode.second] == c.registers[opcode.third] {
-			c.pc += 2
-		}
-	case 0x6000:
-		c.registers[opcode.second] = byte(opcode.lowerByte)
-	case 0x7000:
-		c.registers[opcode.second] += byte(opcode.lowerByte)
-	case 0x8000:
-		switch opcode.fourth {
-		case 0x0:
-			c.registers[opcode.second] = c.registers[opcode.third]
-		case 0x1:
-			c.registers[opcode.second] |= c.registers[opcode.third]
-		case 0x2:
-			c.registers[opcode.second] &= c.registers[opcode.third]
-		case 0x3:
-			c.registers[opcode.second] ^= c.registers[opcode.third]
-		case 0x4:
-			sum := c.registers[opcode.second] + c.registers[opcode.third]
-			c.registers[0xF] = 0
-			if sum > 0xFF {
-				c.registers[0xF] = 1
-			}
-			c.registers[opcode.second] = sum
-		case 0x5:
-			minuend := c.registers[opcode.second]
-			subtrahend := c.registers[opcode.third]
-			c.registers[0xF] = 0
-			if minuend > subtrahend {
-				c.registers[0xF] = 1
-			}
-			c.registers[opcode.second] = minuend - subtrahend
-		case 0x7:
-			minuend := c.registers[opcode.third]
-			subtrahend := c.registers[opcode.second]
-			c.registers[0xF] = 0
-			if minuend > subtrahend {
-				c.registers[0xF] = 1
-			}
-			c.registers[opcode.second] = minuend - subtrahend
-		}
-	case 0x9000:
-		if c.registers[opcode.second] != c.registers[opcode.third] {
-			c.pc += 2
-		}
-	case 0xA000:
-		c.index = opcode.memAddress
-	case 0xD000: // Draw
-		c.registers[0xF] = 0 // set flag to zero
-		height := int(opcode.fourth)
-		xCoord := int(c.registers[opcode.second]) % 64
-		yCoord := int(c.registers[opcode.third]) % 32
 
+	case 0x1000:
+		c.pc = opcode.address
+
+	case 0x2000:
+		c.pushRoutine(c.pc)
+		c.pc = opcode.address
+
+	case 0x3000:
+		if *registerX == byte(opcode.lowerByte) {
+			c.pc += 2
+		}
+
+	case 0x4000:
+		if *registerX != byte(opcode.lowerByte) {
+			c.pc += 2
+		}
+
+	case 0x5000:
+		if *registerX == *registerY {
+			c.pc += 2
+		}
+
+	case 0x6000:
+		*registerX = byte(opcode.lowerByte)
+
+	case 0x7000:
+		*registerX += byte(opcode.lowerByte)
+
+	case 0x8000:
+		switch opcode.n {
+		case 0x0:
+			*registerX = *registerY
+		case 0x1:
+			*registerX |= *registerY
+		case 0x2:
+			*registerX &= *registerY
+		case 0x3:
+			*registerX ^= *registerY
+
+		case 0x4:
+			sum := *registerX + *registerY
+			*flagRegister = 0
+			if sum > 0xFF {
+				*flagRegister = 1
+			}
+			*registerX = sum
+		case 0x5:
+			minuend := *registerX
+			subtrahend := *registerY
+			*flagRegister = 0
+			if minuend > subtrahend {
+				*flagRegister = 1
+			}
+			*registerX = minuend - subtrahend
+		case 0x6:
+			// *registerX = *registerY
+			*flagRegister = 0
+			if *registerX%2 != 0 { // last bit is zero
+				*flagRegister = 1
+			}
+			*registerX >>= 1
+		case 0x7:
+			minuend := *registerY
+			subtrahend := *registerX
+			*flagRegister = 0
+			if minuend > subtrahend {
+				*flagRegister = 1
+			}
+			*registerX = minuend - subtrahend
+		case 0xE:
+			// *registerX = *registerY
+			*flagRegister = 0
+			if *registerX%2 != 0 { // last bit is zero
+				*flagRegister = 1
+			}
+			*registerX <<= 1
+		}
+
+	case 0x9000:
+		if *registerX != *registerY {
+			c.pc += 2
+		}
+
+	case 0xA000:
+		c.index = opcode.address
+
+	case 0xB000: // AMBIGIOUS: Should provide Configuration
+		c.pc = opcode.address
+		c.V[0x0] = byte(opcode.address)
+
+	case 0xC000:
+		*registerX = byte(rand.Intn(0x100)) & byte(opcode.lowerByte)
+
+	case 0xD000: // Draw
+		height := int(opcode.n)
+		xCoord := int(*registerX) % 64
+		yCoord := int(*registerY) % 32
+
+		*flagRegister = 0 // set flag to zero
 		for y := 0; y < height; y++ {
 			pixel := c.memory[c.index+uint16(y)]
 			for x := 0; x < 8; x++ {
 				if (pixel & (0x80 >> x)) != 0 { // if pixel_item is on
 					if c.Gfx[xCoord+x+((yCoord+y)*64)] == 1 { // and Gfx is also on
-						c.registers[0xF] = 1 // then turn the flag on.
+						*flagRegister = 1
 					}
 					c.Gfx[xCoord+x+((yCoord+y)*64)] ^= 1
 				}
 			}
 		}
 		drawSig <- 1 // Draw to Canvas.
+
+	case 0xE000:
+		switch opcode.lowerByte {
+		case 0x9E:
+			if c.keyset[*registerX] == 1 {
+				c.pc += 2
+			}
+		case 0xA1:
+			if c.keyset[*registerX] == 0 {
+				c.pc += 2
+			}
+		}
+
+	case 0xF000:
+		switch opcode.lowerByte {
+		case 0x07:
+			*registerX = c.delayTimer
+		case 0x15:
+			c.delayTimer = *registerX
+		case 0x18:
+			c.soundTimer = *registerX
+		case 0x1E:
+			sum := c.index + uint16(*registerX)
+			*flagRegister = 0
+			if sum > 0xFFFF {
+				*flagRegister = 1
+			}
+			c.index = sum
+		case 0x0A:
+			keypressed := false
+			for i := range c.keyset {
+				if c.keyset[i] == 1 {
+					*registerX = byte(i)
+					keypressed = true
+					break
+				}
+			}
+			if !keypressed { // wait for key input.
+				c.pc -= 2
+			}
+		case 0x29:
+			c.index = uint16(c.memory[fontStart+opcode.n*fontLength])
+		case 0x33:
+			buffer := make([]uint16, 0)
+			for count := int(*registerX); count > 0; {
+				buffer = append(buffer, uint16(count%10))
+				count = count / 10
+			}
+			for i := len(buffer) - 1; i >= 0; i-- {
+				c.memory[c.index+uint16(i)] = byte(buffer[i])
+			}
+		case 0x55:
+			// if 0 is provided, just add registerX to memory.
+			if opcode.x == 0x0 {
+				c.memory[c.index] = *registerX
+			} else {
+				var i uint16
+				for i = 0; i < opcode.x; i++ {
+					c.memory[c.index+i] = c.V[i]
+				}
+			}
+		case 0x65:
+			// if 0 is provided, just read into registerX from memory.
+			if opcode.x == 0x0 {
+				*registerX = c.memory[c.index]
+			} else {
+				var i uint16
+				for i = 0; i < opcode.x; i++ {
+					c.V[i] = c.memory[c.index+1]
+				}
+			}
+
+		}
+
 	}
+
 	return nil
+}
+
+// decode reads and parses the first two memory address to use in execution.
+func decode(current uint16) opcode {
+	parsedOpcode := opcode{
+		instruction: current & 0xF000,
+		x:           current & 0x0F00 >> 8,
+		y:           current & 0x00F0 >> 4,
+		n:           current & 0x000F,
+		lowerByte:   current & 0x00FF,
+		address:     current & 0x0FFF,
+	}
+
+	return parsedOpcode
+}
+
+// pushRoutine will push a reference to the previous pc, as long as the stack isn't full.
+func (c *Chip8) pushRoutine(v uint16) {
+	if c.sp >= stackSize-1 {
+		panic("Stack is full.")
+	}
+	c.stack[c.sp] = v
+	c.sp++
+}
+
+// popRoutine will pop the recently pushed pc, as long as the stack isn't empty.
+func (c *Chip8) popRoutine() uint16 {
+	if c.sp <= 0 {
+		panic("Stack is empty.")
+	}
+	pc := c.stack[c.sp]
+	c.sp--
+	return pc
+}
+
+// ChipRuntimeError catch programmer's generated errors at runtime.
+type ChipRuntimeError struct {
+	lineno int
+	Err    error
+}
+
+// ChipLoaderError catch file loading errors.
+type ChipLoaderError struct {
+	file string
+	Err  error
+}
+
+func (e *ChipRuntimeError) Error() string {
+	return fmt.Sprintf("Error at line %d: %s", e.lineno, e.Err.Error())
+}
+
+func (e *ChipLoaderError) Error() string {
+	return fmt.Sprintf("Error with %s: %s", e.file, e.Err.Error())
 }
