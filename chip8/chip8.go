@@ -27,7 +27,7 @@ const (
 	registerSize = 0x10
 
 	// stackSize is the size of the call-stack used in Chip-8 call routines.
-	stackSize = 0x10
+	stackSize = 0xF
 )
 
 var (
@@ -166,6 +166,7 @@ func (c *Chip8) initialize() {
 func (c *Chip8) emulateCycle(drawSig chan int) error {
 	currentOpcode := uint16(c.memory[c.pc])<<8 | uint16(c.memory[c.pc+1])
 	opcode := decode(currentOpcode)
+	fmt.Printf("Instruction: %#x ==== Program Count: %d\n", currentOpcode, c.pc)
 	c.pc += 2
 
 	registerX := &c.V[opcode.x]
@@ -340,15 +341,16 @@ func (c *Chip8) emulateCycle(drawSig chan int) error {
 		case 0x33:
 			buffer := make([]uint16, 0)
 			for count := int(*registerX); count > 0; {
+				fmt.Println("Count:", count)
 				buffer = append(buffer, uint16(count%10))
 				count = count / 10
 			}
 			for i := len(buffer) - 1; i >= 0; i-- {
-				c.memory[c.index+uint16(i)] = byte(buffer[i])
+				c.memory[c.index+1+uint16(i)] = byte(buffer[i])
 			}
 		case 0x55:
 			// if 0 is provided, just add registerX to memory.
-			if opcode.x == 0x0 {
+			if opcode.x == 0 {
 				c.memory[c.index] = *registerX
 			} else {
 				var i uint16
@@ -402,8 +404,9 @@ func (c *Chip8) popRoutine() uint16 {
 	if c.sp <= 0 {
 		panic("Stack is empty.")
 	}
-	pc := c.stack[c.sp]
 	c.sp--
+	pc := c.stack[c.sp]
+	c.stack[c.sp] = 0
 	return pc
 }
 

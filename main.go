@@ -35,7 +35,7 @@ func run() { // callback function to our "main" routine
 	}
 
 	chip := chip8.New()
-	if err := chip.LoadProgram("./test_opcode.ch8"); err != nil { // load from CLI
+	if err := chip.LoadProgram("./bc_test.ch8"); err != nil { // load from CLI
 		fmt.Println("Error:", err)
 		os.Exit(1)
 	}
