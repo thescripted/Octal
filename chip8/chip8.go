@@ -27,7 +27,7 @@ const (
 	registerSize = 0x10
 
 	// stackSize is the size of the call-stack used in Chip-8 call routines.
-	stackSize = 0xF
+	stackSize = 0x10
 )
 
 var (
@@ -111,7 +111,7 @@ func (c *Chip8) ReleaseKey(key uint) {
 
 // Run will run an infinite game loop.
 func (c *Chip8) Run(drawSig chan int, errSig chan error) {
-	ticker := time.NewTicker(time.Second / 60) // 60Hz
+	ticker := time.NewTicker(time.Second / 120) // 60Hz
 
 	for {
 		select {
@@ -163,6 +163,7 @@ func (c *Chip8) initialize() {
 		c.memory[fontStart+i] = font
 	}
 }
+
 func (c *Chip8) emulateCycle(drawSig chan int) error {
 	currentOpcode := uint16(c.memory[c.pc])<<8 | uint16(c.memory[c.pc+1])
 	opcode := decode(currentOpcode)
@@ -181,15 +182,16 @@ func (c *Chip8) emulateCycle(drawSig chan int) error {
 				c.Gfx[i] = 0
 			}
 			drawSig <- 1 // Draw to Canvas.
+
 		case 0xEE: // return from call routine
-			c.pc = c.popRoutine()
+			c.pc = c.pop()
 		}
 
 	case 0x1000:
 		c.pc = opcode.address
 
 	case 0x2000:
-		c.pushRoutine(c.pc)
+		c.push(c.pc)
 		c.pc = opcode.address
 
 	case 0x3000:
@@ -217,10 +219,13 @@ func (c *Chip8) emulateCycle(drawSig chan int) error {
 		switch opcode.n {
 		case 0x0:
 			*registerX = *registerY
+
 		case 0x1:
 			*registerX |= *registerY
+
 		case 0x2:
 			*registerX &= *registerY
+
 		case 0x3:
 			*registerX ^= *registerY
 
@@ -231,6 +236,7 @@ func (c *Chip8) emulateCycle(drawSig chan int) error {
 				*flagRegister = 1
 			}
 			*registerX = sum
+
 		case 0x5:
 			minuend := *registerX
 			subtrahend := *registerY
@@ -239,13 +245,13 @@ func (c *Chip8) emulateCycle(drawSig chan int) error {
 				*flagRegister = 1
 			}
 			*registerX = minuend - subtrahend
+
 		case 0x6:
 			// *registerX = *registerY
-			*flagRegister = 0
-			if *registerX%2 != 0 { // last bit is zero
-				*flagRegister = 1
-			}
+			lsb := (*registerX & 1)
+			*flagRegister = lsb
 			*registerX >>= 1
+
 		case 0x7:
 			minuend := *registerY
 			subtrahend := *registerX
@@ -254,12 +260,11 @@ func (c *Chip8) emulateCycle(drawSig chan int) error {
 				*flagRegister = 1
 			}
 			*registerX = minuend - subtrahend
+
 		case 0xE:
 			// *registerX = *registerY
-			*flagRegister = 0
-			if *registerX%2 != 0 { // last bit is zero
-				*flagRegister = 1
-			}
+			msb := (*registerX & (1 << 7)) >> 7 // sizeof(byte) = 8
+			*flagRegister = msb
 			*registerX <<= 1
 		}
 
@@ -303,6 +308,7 @@ func (c *Chip8) emulateCycle(drawSig chan int) error {
 			if c.keyset[*registerX] == 1 {
 				c.pc += 2
 			}
+
 		case 0xA1:
 			if c.keyset[*registerX] == 0 {
 				c.pc += 2
@@ -313,10 +319,13 @@ func (c *Chip8) emulateCycle(drawSig chan int) error {
 		switch opcode.lowerByte {
 		case 0x07:
 			*registerX = c.delayTimer
+
 		case 0x15:
 			c.delayTimer = *registerX
+
 		case 0x18:
 			c.soundTimer = *registerX
+
 		case 0x1E:
 			sum := c.index + uint16(*registerX)
 			*flagRegister = 0
@@ -324,6 +333,7 @@ func (c *Chip8) emulateCycle(drawSig chan int) error {
 				*flagRegister = 1
 			}
 			c.index = sum
+
 		case 0x0A:
 			keypressed := false
 			for i := range c.keyset {
@@ -336,18 +346,16 @@ func (c *Chip8) emulateCycle(drawSig chan int) error {
 			if !keypressed { // wait for key input.
 				c.pc -= 2
 			}
+
 		case 0x29:
-			c.index = uint16(c.memory[fontStart+opcode.n*fontLength])
+			c.index = uint16(fontStart + *registerX*fontLength)
+
 		case 0x33:
-			buffer := make([]uint16, 0)
-			for count := int(*registerX); count > 0; {
-				fmt.Println("Count:", count)
-				buffer = append(buffer, uint16(count%10))
-				count = count / 10
-			}
-			for i := len(buffer) - 1; i >= 0; i-- {
-				c.memory[c.index+1+uint16(i)] = byte(buffer[i])
-			}
+			c.memory[c.index] = *registerX / 100
+			c.memory[c.index+1] = (*registerX / 10) % 10
+			c.memory[c.index+2] = *registerX % 10
+			c.index += 2
+
 		case 0x55:
 			// if 0 is provided, just add registerX to memory.
 			if opcode.x == 0 {
@@ -358,6 +366,8 @@ func (c *Chip8) emulateCycle(drawSig chan int) error {
 					c.memory[c.index+i] = c.V[i]
 				}
 			}
+			// c.index += opcode.x + 1
+
 		case 0x65:
 			// if 0 is provided, just read into registerX from memory.
 			if opcode.x == 0x0 {
@@ -365,14 +375,12 @@ func (c *Chip8) emulateCycle(drawSig chan int) error {
 			} else {
 				var i uint16
 				for i = 0; i < opcode.x; i++ {
-					c.V[i] = c.memory[c.index+1]
+					c.V[i] = c.memory[c.index+i]
 				}
 			}
-
+			// c.index += opcode.x + 1
 		}
-
 	}
-
 	return nil
 }
 
@@ -390,8 +398,8 @@ func decode(current uint16) opcode {
 	return parsedOpcode
 }
 
-// pushRoutine will push a reference to the previous pc, as long as the stack isn't full.
-func (c *Chip8) pushRoutine(v uint16) {
+// push will push a reference to the previous pc, as long as the stack isn't full.
+func (c *Chip8) push(v uint16) {
 	if c.sp >= stackSize-1 {
 		panic("Stack is full.")
 	}
@@ -399,8 +407,8 @@ func (c *Chip8) pushRoutine(v uint16) {
 	c.sp++
 }
 
-// popRoutine will pop the recently pushed pc, as long as the stack isn't empty.
-func (c *Chip8) popRoutine() uint16 {
+// pop will pop the recently pushed pc, as long as the stack isn't empty.
+func (c *Chip8) pop() uint16 {
 	if c.sp <= 0 {
 		panic("Stack is empty.")
 	}

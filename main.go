@@ -35,7 +35,7 @@ func run() { // callback function to our "main" routine
 	}
 
 	chip := chip8.New()
-	if err := chip.LoadProgram("./bc_test.ch8"); err != nil { // load from CLI
+	if err := chip.LoadProgram("./rom/octojam2title.ch8"); err != nil { // load from CLI
 		fmt.Println("Error:", err)
 		os.Exit(1)
 	}
@@ -81,7 +81,7 @@ func run() { // callback function to our "main" routine
 					} else {
 						imd.Color = pixel.RGB(1, 1, 1)
 					}
-					imd.Push(pixel.V(x, y), pixel.V(x+10, y+10))
+					imd.Push(pixel.V(x, y), pixel.V(x+10, y-10))
 					imd.Rectangle(0)
 					idx++
 				}

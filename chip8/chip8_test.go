@@ -1,6 +1,7 @@
 package chip8
 
 import (
+	"fmt"
 	"testing"
 )
 
@@ -14,6 +15,23 @@ func TestJump(t *testing.T) {
 	correct := uint16(0xA00)
 	if chip.pc != correct {
 		t.Errorf("Got %#x, expected %#x", chip.pc, correct)
+	}
+
+}
+
+// TestFont calls opcode FX29, checks if the index is set to the correct font character.
+func TestFont(t *testing.T) {
+	dummyDrawChannel := make(chan int)
+	var fontChar byte = 0x5
+	chip := New()
+	chip.V[0] = fontChar
+	chip.memory[chip.pc], chip.memory[chip.pc+1] = 0xF0, 0x29
+	chip.emulateCycle(dummyDrawChannel)
+	fmt.Println("Chip Registers:", chip.V)
+	fmt.Printf("Chip Index: %#x\n", chip.index)
+	var fontLocation uint16 = fontStart + uint16(fontChar)*fontLength
+	if chip.index != fontLocation {
+		t.Errorf("Got %#x, expected %#x", chip.index, fontLocation)
 	}
 
 }
