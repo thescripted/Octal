@@ -52,18 +52,19 @@ var (
 	}
 )
 
-// Chip8 is our emulated processor state
+// Chip8 contains the emulated processor state
 type Chip8 struct {
-	memory     [memSize]byte      // memory of chip-8 VM
-	V          [registerSize]byte // register block
+	Video      [gfxSize]byte // pixel array for graphics
+	SoundTimer byte          // sound timer
+	Keyset     [16]byte      // Key Bindings
+
 	index      uint16             // index reg
 	pc         uint16             // program counter
-	Gfx        [gfxSize]byte      // pixel array for graphics
-	stack      [stackSize]uint16  // Call Stack
 	sp         byte               // Stack pointer
 	delayTimer byte               // delay timer
-	soundTimer byte               // sound timer
-	keyset     [16]byte
+	memory     [memSize]byte      // memory of chip-8 VM
+	V          [registerSize]byte // register block
+	stack      [stackSize]uint16  // Call Stack
 }
 
 type opcode struct {
@@ -101,12 +102,12 @@ func (c *Chip8) LoadProgram(prog string) error {
 
 // PressKey turns on a key flag.
 func (c *Chip8) PressKey(key uint) {
-	c.keyset[key] = 1
+	c.Keyset[key] = 1
 }
 
 // ReleaseKey turns off a key flag.
 func (c *Chip8) ReleaseKey(key uint) {
-	c.keyset[key] = 0
+	c.Keyset[key] = 0
 }
 
 // Run will run an infinite game loop.
@@ -116,12 +117,12 @@ func (c *Chip8) Run(drawSig chan int, errSig chan error) {
 	for {
 		select {
 		case <-ticker.C:
-			c.emulateCycle(drawSig)
+			c.EmulateCycle(drawSig)
 			if c.delayTimer > 0 {
 				c.delayTimer--
 			}
-			if c.soundTimer > 0 {
-				c.soundTimer--
+			if c.SoundTimer > 0 {
+				c.SoundTimer--
 				fmt.Println("Beepin!")
 			}
 		default:
@@ -136,7 +137,7 @@ func (c *Chip8) initialize() {
 	c.sp = 0
 	c.index = 0
 	c.delayTimer = 0
-	c.soundTimer = 0
+	c.SoundTimer = 0
 
 	// clear Register.
 	for i := range c.V {
@@ -149,13 +150,13 @@ func (c *Chip8) initialize() {
 	}
 
 	// clear graphics.
-	for i := range c.Gfx {
-		c.Gfx[i] = 0
+	for i := range c.Video {
+		c.Video[i] = 0
 	}
 
-	// initialize keyset.
-	for i := range c.keyset {
-		c.keyset[i] = 0
+	// initialize Keyset.
+	for i := range c.Keyset {
+		c.Keyset[i] = 0
 	}
 
 	// load the fontset into memory. By convention, fontset occupies 0x50-0x9F.
@@ -164,7 +165,8 @@ func (c *Chip8) initialize() {
 	}
 }
 
-func (c *Chip8) emulateCycle(drawSig chan int) error {
+// EmulateCycle is the Fetch-Decode-Execute routine. It will process one `tick` of instruction.
+func (c *Chip8) EmulateCycle() error {
 	currentOpcode := uint16(c.memory[c.pc])<<8 | uint16(c.memory[c.pc+1])
 	opcode := decode(currentOpcode)
 	fmt.Printf("Instruction: %#x ==== Program Count: %d\n", currentOpcode, c.pc)
@@ -178,11 +180,9 @@ func (c *Chip8) emulateCycle(drawSig chan int) error {
 	case 0x0000:
 		switch opcode.lowerByte {
 		case 0xE0: // Clear
-			for i := range c.Gfx {
-				c.Gfx[i] = 0
+			for i := range c.Video {
+				c.Video[i] = 0
 			}
-			drawSig <- 1 // Draw to Canvas.
-
 		case 0xEE: // return from call routine
 			c.pc = c.pop()
 		}
@@ -293,24 +293,23 @@ func (c *Chip8) emulateCycle(drawSig chan int) error {
 			pixel := c.memory[c.index+uint16(y)]
 			for x := 0; x < 8; x++ {
 				if (pixel & (0x80 >> x)) != 0 { // if pixel_item is on
-					if c.Gfx[xCoord+x+((yCoord+y)*64)] == 1 { // and Gfx is also on
+					if c.Video[xCoord+x+((yCoord+y)*64)] == 1 { // and Video is also on
 						*flagRegister = 1
 					}
-					c.Gfx[xCoord+x+((yCoord+y)*64)] ^= 1
+					c.Video[xCoord+x+((yCoord+y)*64)] ^= 1
 				}
 			}
 		}
-		drawSig <- 1 // Draw to Canvas.
 
 	case 0xE000:
 		switch opcode.lowerByte {
 		case 0x9E:
-			if c.keyset[*registerX] == 1 {
+			if c.Keyset[*registerX] == 1 {
 				c.pc += 2
 			}
 
 		case 0xA1:
-			if c.keyset[*registerX] == 0 {
+			if c.Keyset[*registerX] == 0 {
 				c.pc += 2
 			}
 		}
@@ -324,7 +323,7 @@ func (c *Chip8) emulateCycle(drawSig chan int) error {
 			c.delayTimer = *registerX
 
 		case 0x18:
-			c.soundTimer = *registerX
+			c.SoundTimer = *registerX
 
 		case 0x1E:
 			sum := c.index + uint16(*registerX)
@@ -336,8 +335,8 @@ func (c *Chip8) emulateCycle(drawSig chan int) error {
 
 		case 0x0A:
 			keypressed := false
-			for i := range c.keyset {
-				if c.keyset[i] == 1 {
+			for i := range c.Keyset {
+				if c.Keyset[i] == 1 {
 					*registerX = byte(i)
 					keypressed = true
 					break
@@ -381,7 +380,19 @@ func (c *Chip8) emulateCycle(drawSig chan int) error {
 			// c.index += opcode.x + 1
 		}
 	}
+
 	return nil
+}
+
+// EmulateTimer decrements the sound and delay timer.
+func (c *Chip8) EmulateTimer() {
+	if c.delayTimer > 0 {
+		c.delayTimer--
+	}
+	if c.SoundTimer > 0 {
+		c.SoundTimer--
+		fmt.Println("Beepin!")
+	}
 }
 
 // decode reads and parses the first two memory address to use in execution.

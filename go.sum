@@ -65,6 +65,8 @@ github.com/spf13/pflag v0.0.0-20170417173400-9e4c21054fa1/go.mod h1:DYY7MBk1bdzu
 github.com/stretchr/objx v0.1.0/go.mod h1:HFkY916IF+rwdDfMAkV7OtwuqBVzrE8GR6GFx+wExME=
 github.com/stretchr/testify v1.2.2/go.mod h1:a8OnRcib4nhh0OaRAV+Yts87kKdq0PP7pXfy6kDkUVs=
 github.com/stretchr/testify v1.3.0/go.mod h1:M5WIy9Dh21IEIfnGCwXGc5bZfKNJtfHm1UVUgZn+9EI=
+github.com/veandco/go-sdl2 v0.4.5 h1:GFIjMabK7y2XWpr9sGvN7RDKHt7vrA7XPTUW60eOw+Y=
+github.com/veandco/go-sdl2 v0.4.5/go.mod h1:OROqMhHD43nT4/i9crJukyVecjPNYYuCofep6SNiAjY=
 go.starlark.net v0.0.0-20200821142938-949cc6f4b097 h1:YiRMXXgG+Pg26t1fjq+iAjaauKWMC9cmGFrtOEuwDDg=
 go.starlark.net v0.0.0-20200821142938-949cc6f4b097/go.mod h1:f0znQkUKRrkk36XxWbGjMqQM8wGv/xHBVE2qc3B5oFU=
 golang.org/x/arch v0.0.0-20190927153633-4e8777c89be4 h1:QlVATYS7JBoZMVaf+cNjb90WD/beKVHnIxFKT4QaHVI=

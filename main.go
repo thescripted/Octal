@@ -5,106 +5,79 @@ import (
 	"os"
 	"time"
 
-	"github.com/faiface/pixel"
-	"github.com/faiface/pixel/imdraw"
-	"github.com/faiface/pixel/pixelgl"
 	"github.com/thescripted/hapax8/chip8"
-	"golang.org/x/image/colornames"
+	"github.com/veandco/go-sdl2/sdl"
 )
 
-func run() { // callback function to our "main" routine
+var (
+	// Chip is the CHIP_8 Virtual Machine
+	Chip *chip8.Chip8
+)
 
-	// KeyMap maps the keyboard to a CHIP-8 Key
-	KeyMap := map[pixelgl.Button]uint{
-		pixelgl.KeyX: 0x0,
-		pixelgl.Key1: 0x1,
-		pixelgl.Key2: 0x2,
-		pixelgl.Key3: 0x3,
-		pixelgl.KeyQ: 0x4,
-		pixelgl.KeyW: 0x5,
-		pixelgl.KeyE: 0x6,
-		pixelgl.KeyA: 0x7,
-		pixelgl.KeyS: 0x8,
-		pixelgl.KeyD: 0x9,
-		pixelgl.KeyZ: 0xA,
-		pixelgl.KeyC: 0xB,
-		pixelgl.Key4: 0xC,
-		pixelgl.KeyR: 0xD,
-		pixelgl.KeyF: 0xE,
-		pixelgl.KeyV: 0xF,
-	}
+func main() { // callback function to our "main" routine
 
-	chip := chip8.New()
-	if err := chip.LoadProgram("./rom/octojam2title.ch8"); err != nil { // load from CLI
+	Chip = chip8.New()
+
+	// Move this over to a CLI tool.
+	if err := Chip.LoadProgram("./rom/octojam2title.ch8"); err != nil { // load from CLI
 		fmt.Println("Error:", err)
 		os.Exit(1)
 	}
 
-	drawSig := make(chan int)
-	errSig := make(chan error)
-	go chip.Run(drawSig, errSig)
-
-	graphics := &chip.Gfx
-
-	cfg := pixelgl.WindowConfig{
-		Title:  "GT Sucks!",
-		Bounds: pixel.R(0, 0, 640, 320),
-		VSync:  true,
-	}
-
-	win, err := pixelgl.NewWindow(cfg)
+	// initialize window & renderer.
+	window, renderer, err := sdl.CreateWindowAndRenderer(800, 600, sdl.WINDOWEVENT_SHOWN)
 	if err != nil {
 		panic(err)
 	}
+	defer window.Destroy()
+	defer renderer.Destroy()
 
-	imd := imdraw.New(nil)
+	window.SetTitle("Testing SDL2")
 
-	// FPS Calcuation
-	var (
-		frames = 0
-		second = time.Tick(time.Second)
-	)
+	format := sdl.PIXELFORMAT_ABGR8888
+	access := sdl.TEXTUREACCESS_STREAMING
+	tex, err := renderer.CreateTexture(uint32(format), access, 128, 64)
+	if err != nil {
+		panic(err)
+	}
+	defer tex.Destroy()
 
-	win.Clear(colornames.Gold)
-	for !win.Closed() {
+	// Game Cycles
+	clock := time.NewTicker(time.Millisecond)
+	video := time.NewTicker(time.Second / 60)
+	timer := time.NewTicker(time.Second / 60)
+	fps := time.NewTicker(time.Second)
+	frames := 0
+
+	// Game Loop.
+	for processEvent() {
 		select {
-		case <-second: // FPS Capture
-			win.SetTitle(fmt.Sprintf("%s | FPS: %d", cfg.Title, frames))
+		case <-fps.C: // FPS Capture
+			fmt.Println("Frames:", frames)
 			frames = 0
-		case <-drawSig: // Draw Capture
-			imd.Clear()
-			idx := 0
-			for y := win.Bounds().Max.Y; y > win.Bounds().Min.Y; y -= 320 / 32 {
-				for x := win.Bounds().Min.X; x < win.Bounds().Max.X; x += 640 / 64 {
-					if graphics[idx]%2 == 0 { // memory pixels are binary. this needs to be more efficient.
-						imd.Color = pixel.RGB(0, 0, 0)
-					} else {
-						imd.Color = pixel.RGB(1, 1, 1)
-					}
-					imd.Push(pixel.V(x, y), pixel.V(x+10, y-10))
-					imd.Rectangle(0)
-					idx++
-				}
-			}
-			imd.Draw(win)
+		case <-clock.C: // Emulate Cycle.
+			Chip.EmulateCycle()
+		case <-video.C: // Draw
+			draw()
+		case <-timer.C: // SoundTimer and DelayTimer
+			Chip.EmulateTimer()
 		default:
 		}
-
-		// independent of Chip-8 Clock speed.
-		for key, val := range KeyMap {
-			if win.JustPressed(key) {
-				chip.PressKey(val)
-			}
-			if win.JustReleased(key) {
-				chip.ReleaseKey(val)
-			}
-		}
-
 		frames++
-		win.Update()
 	}
 }
 
-func main() {
-	pixelgl.Run(run) // enable pixelgl to capture main function
+// draw draws the graphics onto the screen..
+func draw() {
+}
+
+// Process event register keys & other external game information.
+func processEvent() bool {
+	for event := sdl.PollEvent(); event != nil; event = sdl.PollEvent() {
+		switch event.(type) {
+		case *sdl.QuitEvent:
+			return false
+		}
+	}
+	return true
 }
