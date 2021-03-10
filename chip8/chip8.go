@@ -117,7 +117,7 @@ func (c *Chip8) Run(drawSig chan int, errSig chan error) {
 	for {
 		select {
 		case <-ticker.C:
-			c.EmulateCycle(drawSig)
+			c.EmulateCycle()
 			if c.delayTimer > 0 {
 				c.delayTimer--
 			}
@@ -176,7 +176,7 @@ func (c *Chip8) EmulateCycle() error {
 	registerY := &c.V[opcode.y]
 	flagRegister := &c.V[0xF]
 
-	switch opcode.instruction { // exposes the first half-byte in the opcode
+	switch opcode.instruction {
 	case 0x0000:
 		switch opcode.lowerByte {
 		case 0xE0: // Clear
@@ -425,7 +425,6 @@ func (c *Chip8) pop() uint16 {
 	}
 	c.sp--
 	pc := c.stack[c.sp]
-	c.stack[c.sp] = 0
 	return pc
 }
 
