@@ -14,12 +14,12 @@ var (
 	Chip *chip8.Chip8
 )
 
-func main() { // callback function to our "main" routine
+func main() {
 
 	Chip = chip8.New()
 
-	// Move this over to a CLI tool.
-	if err := Chip.LoadProgram("./rom/octojam2title.ch8"); err != nil { // load from CLI
+	// Move this over to a CLI call.
+	if err := Chip.LoadProgram("./rom/octojam2title.ch8"); err != nil {
 		fmt.Println("Error:", err)
 		os.Exit(1)
 	}
