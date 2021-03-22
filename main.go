@@ -44,8 +44,8 @@ func main() { // callback function to our "main" routine
 
 	// Game Cycles
 	clock := time.NewTicker(time.Millisecond)
-	video := time.NewTicker(time.Second / 60)
 	timer := time.NewTicker(time.Second / 60)
+	video := time.NewTicker(time.Second / 60)
 	fps := time.NewTicker(time.Second)
 	frames := 0
 
@@ -57,10 +57,10 @@ func main() { // callback function to our "main" routine
 			frames = 0
 		case <-clock.C: // Emulate Cycle.
 			Chip.EmulateCycle()
-		case <-video.C: // Draw
-			draw()
 		case <-timer.C: // SoundTimer and DelayTimer
 			Chip.EmulateTimer()
+		case <-video.C: // Draw
+			draw()
 		default:
 		}
 		frames++

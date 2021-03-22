@@ -4,7 +4,6 @@ import (
 	"fmt"
 	"math/rand"
 	"os"
-	"time"
 )
 
 const (
@@ -108,26 +107,6 @@ func (c *Chip8) PressKey(key uint) {
 // ReleaseKey turns off a key flag.
 func (c *Chip8) ReleaseKey(key uint) {
 	c.Keyset[key] = 0
-}
-
-// Run will run an infinite game loop.
-func (c *Chip8) Run(drawSig chan int, errSig chan error) {
-	ticker := time.NewTicker(time.Second / 120) // 60Hz
-
-	for {
-		select {
-		case <-ticker.C:
-			c.EmulateCycle(drawSig)
-			if c.delayTimer > 0 {
-				c.delayTimer--
-			}
-			if c.SoundTimer > 0 {
-				c.SoundTimer--
-				fmt.Println("Beepin!")
-			}
-		default:
-		}
-	}
 }
 
 // initialize will clear display, stack, registers, and memory.
