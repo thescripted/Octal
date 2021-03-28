@@ -20,30 +20,30 @@ var (
 	renderer *sdl.Renderer
 	pixel    sdl.Rect
 	err      error
-	KeyMap   = map[sdl.Scancode]uint{
-		sdl.SCANCODE_X: 0x0,
-		sdl.SCANCODE_1: 0x1,
-		sdl.SCANCODE_2: 0x2,
-		sdl.SCANCODE_3: 0x3,
-		sdl.SCANCODE_Q: 0x4,
-		sdl.SCANCODE_W: 0x5,
-		sdl.SCANCODE_E: 0x6,
-		sdl.SCANCODE_A: 0x7,
-		sdl.SCANCODE_S: 0x8,
-		sdl.SCANCODE_D: 0x9,
-		sdl.SCANCODE_Z: 0xA,
-		sdl.SCANCODE_C: 0xB,
-		sdl.SCANCODE_4: 0xC,
-		sdl.SCANCODE_R: 0xD,
-		sdl.SCANCODE_F: 0xE,
-		sdl.SCANCODE_V: 0xF,
-	}
 )
+var KeyMap = map[sdl.Scancode]uint{
+	sdl.SCANCODE_X: 0x0,
+	sdl.SCANCODE_1: 0x1,
+	sdl.SCANCODE_2: 0x2,
+	sdl.SCANCODE_3: 0x3,
+	sdl.SCANCODE_Q: 0x4,
+	sdl.SCANCODE_W: 0x5,
+	sdl.SCANCODE_E: 0x6,
+	sdl.SCANCODE_A: 0x7,
+	sdl.SCANCODE_S: 0x8,
+	sdl.SCANCODE_D: 0x9,
+	sdl.SCANCODE_Z: 0xA,
+	sdl.SCANCODE_C: 0xB,
+	sdl.SCANCODE_4: 0xC,
+	sdl.SCANCODE_R: 0xD,
+	sdl.SCANCODE_F: 0xE,
+	sdl.SCANCODE_V: 0xF,
+}
 
 func main() {
 	// Initialize Chip
 	Chip = chip8.New()
-	if err = Chip.LoadProgram("./rom/IBM Logo.ch8"); err != nil {
+	if err = Chip.LoadProgram("./rom/test_opcode.ch8"); err != nil {
 		panic(err)
 	}
 

@@ -29,29 +29,27 @@ const (
 	stackSize = 0x10
 )
 
-var (
-	// fontSet is the default font for Chip-8. This is loaded on init.
-	fontSet = [80]byte{
-		0xF0, 0x90, 0x90, 0x90, 0xF0, // 0
-		0x20, 0x60, 0x20, 0x20, 0x70, // 1
-		0xF0, 0x10, 0xF0, 0x80, 0xF0, // 2
-		0xF0, 0x10, 0xF0, 0x10, 0xF0, // 3
-		0x90, 0x90, 0xF0, 0x10, 0x10, // 4
-		0xF0, 0x80, 0xF0, 0x10, 0xF0, // 5
-		0xF0, 0x80, 0xF0, 0x90, 0xF0, // 6
-		0xF0, 0x10, 0x20, 0x40, 0x40, // 7
-		0xF0, 0x90, 0xF0, 0x90, 0xF0, // 8
-		0xF0, 0x90, 0xF0, 0x10, 0xF0, // 9
-		0xF0, 0x90, 0xF0, 0x90, 0x90, // A
-		0xE0, 0x90, 0xE0, 0x90, 0xE0, // B
-		0xF0, 0x80, 0x80, 0x80, 0xF0, // C
-		0xE0, 0x90, 0x90, 0x90, 0xE0, // D
-		0xF0, 0x80, 0xF0, 0x80, 0xF0, // E
-		0xF0, 0x80, 0xF0, 0x80, 0x80, // F
-	}
-)
+// fontSet is the default font for Chip-8. This is loaded on init.
+var fontSet = [80]byte{
+	0xF0, 0x90, 0x90, 0x90, 0xF0, // 0
+	0x20, 0x60, 0x20, 0x20, 0x70, // 1
+	0xF0, 0x10, 0xF0, 0x80, 0xF0, // 2
+	0xF0, 0x10, 0xF0, 0x10, 0xF0, // 3
+	0x90, 0x90, 0xF0, 0x10, 0x10, // 4
+	0xF0, 0x80, 0xF0, 0x10, 0xF0, // 5
+	0xF0, 0x80, 0xF0, 0x90, 0xF0, // 6
+	0xF0, 0x10, 0x20, 0x40, 0x40, // 7
+	0xF0, 0x90, 0xF0, 0x90, 0xF0, // 8
+	0xF0, 0x90, 0xF0, 0x10, 0xF0, // 9
+	0xF0, 0x90, 0xF0, 0x90, 0x90, // A
+	0xE0, 0x90, 0xE0, 0x90, 0xE0, // B
+	0xF0, 0x80, 0x80, 0x80, 0xF0, // C
+	0xE0, 0x90, 0x90, 0x90, 0xE0, // D
+	0xF0, 0x80, 0xF0, 0x80, 0xF0, // E
+	0xF0, 0x80, 0xF0, 0x80, 0x80, // F
+}
 
-// Chip8 contains the emulated processor state
+// Chip8 contains the emulated processor state.
 type Chip8 struct {
 	Video      [gfxSize]byte // pixel array for graphics
 	SoundTimer byte          // sound timer
@@ -66,6 +64,7 @@ type Chip8 struct {
 	stack      [stackSize]uint16  // Call Stack
 }
 
+// opcode is a data structure containing the instruction.
 type opcode struct {
 	instruction uint16
 	x           uint16
@@ -105,41 +104,6 @@ func (c *Chip8) PressKey(key uint) {
 // ReleaseKey turns off a key flag.
 func (c *Chip8) ReleaseKey(key uint) {
 	c.Key[key] = 0
-}
-
-// init will clear display, stack, registers, and memory.
-// this is used when the emulator begins or is reset with another game.
-func (c *Chip8) init() {
-	c.pc = programStart // program counter starts at 0x200
-	c.sp = 0
-	c.index = 0
-	c.delayTimer = 0
-	c.SoundTimer = 0
-
-	// clear Register.
-	for i := range c.v {
-		c.v[i] = 0
-	}
-
-	// clear call stack.
-	for i := range c.stack {
-		c.stack[i] = 0
-	}
-
-	// clear graphics.
-	for i := range c.Video {
-		c.Video[i] = 0
-	}
-
-	// init Key.
-	for i := range c.Key {
-		c.Key[i] = 0
-	}
-
-	// load the fontset into memory. By convention, fontset occupies 0x50-0x9F.
-	for i, font := range fontSet {
-		c.memory[fontStart+i] = font
-	}
 }
 
 // Tick is the Fetch-Decode-Execute routine. It will process one `tick` of instruction.
@@ -252,7 +216,7 @@ func (c *Chip8) Tick() error {
 	case 0xA000:
 		c.index = opcode.address
 
-	case 0xB000: // AMBIGIOUS: Should provide Configuration
+	case 0xB000: // AMBIGUOUS: Should provide Configuration
 		c.pc = opcode.address
 		c.v[0x0] = byte(opcode.address)
 
@@ -261,18 +225,18 @@ func (c *Chip8) Tick() error {
 
 	case 0xD000: // Draw
 		height := int(opcode.n)
-		xCoord := int(*registerX) % 64
-		yCoord := int(*registerY) % 32
+		xCoordinate := int(*registerX) % 64
+		yCoordinate := int(*registerY) % 32
 
 		*flagRegister = 0 // set flag to zero
 		for y := 0; y < height; y++ {
 			pixel := c.memory[c.index+uint16(y)]
 			for x := 0; x < 8; x++ {
 				if (pixel & (0x80 >> x)) != 0 { // if pixel_item is on
-					if c.Video[xCoord+x+((yCoord+y)*64)] == 1 { // and Video is also on
+					if c.Video[xCoordinate+x+((yCoordinate+y)*64)] == 1 { // and Video is also on
 						*flagRegister = 1
 					}
-					c.Video[xCoord+x+((yCoord+y)*64)] ^= 1
+					c.Video[xCoordinate+x+((yCoordinate+y)*64)] ^= 1
 				}
 			}
 		}
@@ -310,15 +274,15 @@ func (c *Chip8) Tick() error {
 			c.index = sum
 
 		case 0x0A:
-			keypressed := false
+			keyPressed := false
 			for i := range c.Key {
 				if c.Key[i] == 1 {
 					*registerX = byte(i)
-					keypressed = true
+					keyPressed = true
 					break
 				}
 			}
-			if !keypressed { // wait for key input.
+			if !keyPressed { // wait for key input.
 				c.pc -= 2
 			}
 
@@ -367,7 +331,41 @@ func (c *Chip8) EmulateTimer() {
 	}
 	if c.SoundTimer > 0 {
 		c.SoundTimer--
-		fmt.Println("Beepin!")
+		fmt.Println("Beeping!")
+	}
+}
+
+// init will clear display, stack, registers (v), and memory.
+func (c *Chip8) init() {
+	c.pc = programStart // program counter starts at 0x200
+	c.sp = 0
+	c.index = 0
+	c.delayTimer = 0
+	c.SoundTimer = 0
+
+	// clear Register.
+	for i := range c.v {
+		c.v[i] = 0
+	}
+
+	// clear call stack.
+	for i := range c.stack {
+		c.stack[i] = 0
+	}
+
+	// clear graphics.
+	for i := range c.Video {
+		c.Video[i] = 0
+	}
+
+	// init Key.
+	for i := range c.Key {
+		c.Key[i] = 0
+	}
+
+	// load the fontset into memory. By convention, fontset occupies 0x50-0x9F.
+	for i, font := range fontSet {
+		c.memory[fontStart+i] = font
 	}
 }
 
@@ -402,24 +400,4 @@ func (c *Chip8) pop() uint16 {
 	c.sp--
 	pc := c.stack[c.sp]
 	return pc
-}
-
-// ChipRuntimeError catch programmer's generated errors at runtime.
-type ChipRuntimeError struct {
-	lineno int
-	Err    error
-}
-
-// ChipLoaderError catch file loading errors.
-type ChipLoaderError struct {
-	file string
-	Err  error
-}
-
-func (e *ChipRuntimeError) Error() string {
-	return fmt.Sprintf("Error at line %d: %s", e.lineno, e.Err.Error())
-}
-
-func (e *ChipLoaderError) Error() string {
-	return fmt.Sprintf("Error with %s: %s", e.file, e.Err.Error())
 }
