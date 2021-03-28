@@ -80,7 +80,6 @@ func main() {
 		default:
 		}
 		frames++
-		sdl.Delay(16)
 	}
 
 	defer sdl.Quit()

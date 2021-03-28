@@ -13,14 +13,14 @@ const (
 	// gfxSize is the size of the graphics card rendered by pixel.
 	gfxSize = 0x800
 
-	// fontStart is where the fontset begins in memory.
+	// fontStart is where the font set begins in memory.
 	fontStart = 0x50
 
 	// fontLength is the length of an individual font.
 	fontLength = 0x5
 
-	// progStart is where all Chip-8 ROMs instruction start at in memory.
-	progStart = 0x200
+	// programStart is where all Chip-8 ROMs instruction start at in memory.
+	programStart = 0x200
 
 	// registerSize is the size of the Vx register in Chip-8.
 	registerSize = 0x10
@@ -55,14 +55,14 @@ var (
 type Chip8 struct {
 	Video      [gfxSize]byte // pixel array for graphics
 	SoundTimer byte          // sound timer
-	Keyset     [16]byte      // Key Bindings
+	Key        [16]byte      // Key Bindings
 
 	index      uint16             // index reg
 	pc         uint16             // program counter
 	sp         byte               // Stack pointer
 	delayTimer byte               // delay timer
 	memory     [memSize]byte      // memory of chip-8 VM
-	V          [registerSize]byte // register block
+	v          [registerSize]byte // register block
 	stack      [stackSize]uint16  // Call Stack
 }
 
@@ -78,20 +78,18 @@ type opcode struct {
 // New returns a new instance of a Chip8 VM.
 func New() *Chip8 {
 	chip := &Chip8{}
-	chip.initialize()
-	// load the fontset.
-
+	chip.init()
 	return chip
 }
 
 // LoadProgram loads the program from a file into the Chip8's memory.
-func (c *Chip8) LoadProgram(prog string) error {
-	c.initialize()
-	progFile, err := os.Open(prog)
+func (c *Chip8) LoadProgram(program string) error {
+	c.init()
+	programFile, err := os.Open(program)
 	if err != nil {
 		return err
 	}
-	_, err = progFile.Read(c.memory[progStart:])
+	_, err = programFile.Read(c.memory[programStart:])
 	if err != nil {
 		return err
 	}
@@ -101,26 +99,26 @@ func (c *Chip8) LoadProgram(prog string) error {
 
 // PressKey turns on a key flag.
 func (c *Chip8) PressKey(key uint) {
-	c.Keyset[key] = 1
+	c.Key[key] = 1
 }
 
 // ReleaseKey turns off a key flag.
 func (c *Chip8) ReleaseKey(key uint) {
-	c.Keyset[key] = 0
+	c.Key[key] = 0
 }
 
-// initialize will clear display, stack, registers, and memory.
+// init will clear display, stack, registers, and memory.
 // this is used when the emulator begins or is reset with another game.
-func (c *Chip8) initialize() {
-	c.pc = progStart // program counter starts at 0x200
+func (c *Chip8) init() {
+	c.pc = programStart // program counter starts at 0x200
 	c.sp = 0
 	c.index = 0
 	c.delayTimer = 0
 	c.SoundTimer = 0
 
 	// clear Register.
-	for i := range c.V {
-		c.V[i] = 0
+	for i := range c.v {
+		c.v[i] = 0
 	}
 
 	// clear call stack.
@@ -133,9 +131,9 @@ func (c *Chip8) initialize() {
 		c.Video[i] = 0
 	}
 
-	// initialize Keyset.
-	for i := range c.Keyset {
-		c.Keyset[i] = 0
+	// init Key.
+	for i := range c.Key {
+		c.Key[i] = 0
 	}
 
 	// load the fontset into memory. By convention, fontset occupies 0x50-0x9F.
@@ -148,12 +146,11 @@ func (c *Chip8) initialize() {
 func (c *Chip8) Tick() error {
 	currentOpcode := uint16(c.memory[c.pc])<<8 | uint16(c.memory[c.pc+1])
 	opcode := decode(currentOpcode)
-	fmt.Printf("Instruction: %#x ==== Program Count: %d\n", currentOpcode, c.pc)
 	c.pc += 2
 
-	registerX := &c.V[opcode.x]
-	registerY := &c.V[opcode.y]
-	flagRegister := &c.V[0xF]
+	registerX := &c.v[opcode.x]
+	registerY := &c.v[opcode.y]
+	flagRegister := &c.v[0xF]
 
 	switch opcode.instruction {
 	case 0x0000:
@@ -257,7 +254,7 @@ func (c *Chip8) Tick() error {
 
 	case 0xB000: // AMBIGIOUS: Should provide Configuration
 		c.pc = opcode.address
-		c.V[0x0] = byte(opcode.address)
+		c.v[0x0] = byte(opcode.address)
 
 	case 0xC000:
 		*registerX = byte(rand.Intn(0x100)) & byte(opcode.lowerByte)
@@ -283,12 +280,12 @@ func (c *Chip8) Tick() error {
 	case 0xE000:
 		switch opcode.lowerByte {
 		case 0x9E:
-			if c.Keyset[*registerX] == 1 {
+			if c.Key[*registerX] == 1 {
 				c.pc += 2
 			}
 
 		case 0xA1:
-			if c.Keyset[*registerX] == 0 {
+			if c.Key[*registerX] == 0 {
 				c.pc += 2
 			}
 		}
@@ -314,8 +311,8 @@ func (c *Chip8) Tick() error {
 
 		case 0x0A:
 			keypressed := false
-			for i := range c.Keyset {
-				if c.Keyset[i] == 1 {
+			for i := range c.Key {
+				if c.Key[i] == 1 {
 					*registerX = byte(i)
 					keypressed = true
 					break
@@ -341,7 +338,7 @@ func (c *Chip8) Tick() error {
 			} else {
 				var i uint16
 				for i = 0; i < opcode.x; i++ {
-					c.memory[c.index+i] = c.V[i]
+					c.memory[c.index+i] = c.v[i]
 				}
 			}
 			// c.index += opcode.x + 1
@@ -353,7 +350,7 @@ func (c *Chip8) Tick() error {
 			} else {
 				var i uint16
 				for i = 0; i < opcode.x; i++ {
-					c.V[i] = c.memory[c.index+i]
+					c.v[i] = c.memory[c.index+i]
 				}
 			}
 			// c.index += opcode.x + 1
