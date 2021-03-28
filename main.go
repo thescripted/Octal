@@ -20,6 +20,24 @@ var (
 	renderer *sdl.Renderer
 	pixel    sdl.Rect
 	err      error
+	KeyMap   = map[sdl.Scancode]uint{
+		sdl.SCANCODE_X: 0x0,
+		sdl.SCANCODE_1: 0x1,
+		sdl.SCANCODE_2: 0x2,
+		sdl.SCANCODE_3: 0x3,
+		sdl.SCANCODE_Q: 0x4,
+		sdl.SCANCODE_W: 0x5,
+		sdl.SCANCODE_E: 0x6,
+		sdl.SCANCODE_A: 0x7,
+		sdl.SCANCODE_S: 0x8,
+		sdl.SCANCODE_D: 0x9,
+		sdl.SCANCODE_Z: 0xA,
+		sdl.SCANCODE_C: 0xB,
+		sdl.SCANCODE_4: 0xC,
+		sdl.SCANCODE_R: 0xD,
+		sdl.SCANCODE_F: 0xE,
+		sdl.SCANCODE_V: 0xF,
+	}
 )
 
 func main() {
@@ -80,6 +98,7 @@ func main() {
 		default:
 		}
 		frames++
+		sdl.Delay(1) // 1ms Delay
 	}
 
 	defer sdl.Quit()
@@ -101,9 +120,22 @@ func draw(video [0x800]byte) {
 
 func processEvent() bool {
 	for event := sdl.PollEvent(); event != nil; event = sdl.PollEvent() {
-		switch event.(type) {
+		switch ev := event.(type) {
 		case *sdl.QuitEvent:
 			return false
+		case *sdl.KeyboardEvent:
+			if ev.Type == sdl.KEYUP {
+				if key, ok := KeyMap[ev.Keysym.Scancode]; ok {
+					fmt.Println("Releasing:", key, ev.Keysym.Scancode)
+					Chip.ReleaseKey(key)
+				}
+			} else {
+				if key, ok := KeyMap[ev.Keysym.Scancode]; ok {
+					fmt.Println("Pressing:", key, ev.Keysym.Scancode)
+					Chip.PressKey(key)
+				}
+				// Should listen to other Keyboard Events here...
+			}
 		}
 	}
 	return true
