@@ -2,45 +2,61 @@ package main
 
 import (
 	"fmt"
-	"os"
-	"time"
-
-	"github.com/thescripted/hapax8/chip8"
 	"github.com/veandco/go-sdl2/sdl"
+	"time"
 )
 
-var (
-	// Chip is the CHIP_8 Virtual Machine
-	Chip *chip8.Chip8
+const (
+	screenWidth  = 640
+	screenHeight = 320
+	pixelWidth   = screenWidth / 64
+	pixelHeight  = screenHeight / 32
 )
 
 func main() {
-
-	Chip = chip8.New()
-
-	// Move this over to a CLI call.
-	if err := Chip.LoadProgram("./rom/octojam2title.ch8"); err != nil {
-		fmt.Println("Error:", err)
-		os.Exit(1)
+	if err := sdl.Init(sdl.INIT_VIDEO); err != nil {
+		panic(err)
 	}
 
-	// initialize window & renderer.
-	window, renderer, err := sdl.CreateWindowAndRenderer(800, 600, sdl.WINDOWEVENT_SHOWN)
+	window, err := sdl.CreateWindow("CHIP - 8.", sdl.WINDOWPOS_UNDEFINED, sdl.WINDOWPOS_UNDEFINED, screenWidth, screenHeight, 0)
 	if err != nil {
 		panic(err)
 	}
 	defer window.Destroy()
-	defer renderer.Destroy()
 
-	window.SetTitle("Testing SDL2")
-
-	format := sdl.PIXELFORMAT_ABGR8888
-	access := sdl.TEXTUREACCESS_STREAMING
-	tex, err := renderer.CreateTexture(uint32(format), access, 128, 64)
+	renderer, err := sdl.CreateRenderer(window, -1, sdl.RENDERER_ACCELERATED)
 	if err != nil {
 		panic(err)
 	}
-	defer tex.Destroy()
+	defer renderer.Destroy()
+
+	sdl.SetHint(sdl.HINT_RENDER_SCALE_QUALITY, "linear")
+
+	renderer.SetDrawColor(96, 128, 128, 255)
+	renderer.Clear()
+
+	pixel := sdl.Rect{
+		X: 0,
+		Y: 0,
+		W: pixelWidth,
+		H: pixelHeight,
+	}
+
+	var k uint8 = 0
+	for i := 0; i < 64; i++ {
+		pixel.X = int32(i * pixelWidth)
+		for j := 0; j < 32; j++ {
+			pixel.Y = int32(j * pixelHeight)
+			renderer.SetDrawColor(255*k, 255*k, 255*k, 255)
+			renderer.FillRect(&pixel)
+			if k == 0 {
+				k = uint8(1)
+			} else {
+				k = uint8(0)
+			}
+		}
+	}
+	renderer.Present()
 
 	// Game Cycles
 	clock := time.NewTicker(time.Millisecond)
@@ -49,33 +65,28 @@ func main() {
 	fps := time.NewTicker(time.Second)
 	frames := 0
 
-	// Game Loop.
 	for processEvent() {
 		select {
 		case <-fps.C: // FPS Capture
 			fmt.Println("Frames:", frames)
 			frames = 0
 		case <-clock.C: // Emulate Cycle.
-			Chip.EmulateCycle()
 		case <-timer.C: // SoundTimer and DelayTimer
-			Chip.EmulateTimer()
 		case <-video.C: // Draw
-			draw()
 		default:
 		}
 		frames++
+		sdl.Delay(16)
 	}
+
+	defer sdl.Quit()
 }
 
-// draw draws the graphics onto the screen..
-func draw() {
-}
-
-// Process event register keys & other external game information.
 func processEvent() bool {
 	for event := sdl.PollEvent(); event != nil; event = sdl.PollEvent() {
 		switch event.(type) {
 		case *sdl.QuitEvent:
+			println("Quitting...")
 			return false
 		}
 	}
