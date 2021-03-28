@@ -2,6 +2,7 @@ package main
 
 import (
 	"fmt"
+	"github.com/thescripted/Octal/chip8"
 	"github.com/veandco/go-sdl2/sdl"
 	"time"
 )
@@ -13,50 +14,49 @@ const (
 	pixelHeight  = screenHeight / 32
 )
 
+var (
+	Chip     *chip8.Chip8
+	window   *sdl.Window
+	renderer *sdl.Renderer
+	pixel    sdl.Rect
+	err      error
+)
+
 func main() {
-	if err := sdl.Init(sdl.INIT_VIDEO); err != nil {
+	// Initialize Chip
+	Chip = chip8.New()
+	if err = Chip.LoadProgram("./rom/IBM Logo.ch8"); err != nil {
 		panic(err)
 	}
 
-	window, err := sdl.CreateWindow("CHIP - 8.", sdl.WINDOWPOS_UNDEFINED, sdl.WINDOWPOS_UNDEFINED, screenWidth, screenHeight, 0)
+	// Initialize Graphics
+	if err = sdl.Init(sdl.INIT_VIDEO); err != nil {
+		panic(err)
+	}
+	window, err = sdl.CreateWindow("CHIP - 8", sdl.WINDOWPOS_UNDEFINED, sdl.WINDOWPOS_UNDEFINED, screenWidth, screenHeight, 0)
 	if err != nil {
 		panic(err)
 	}
 	defer window.Destroy()
-
-	renderer, err := sdl.CreateRenderer(window, -1, sdl.RENDERER_ACCELERATED)
+	renderer, err = sdl.CreateRenderer(window, -1, sdl.RENDERER_ACCELERATED)
 	if err != nil {
 		panic(err)
 	}
 	defer renderer.Destroy()
-
 	sdl.SetHint(sdl.HINT_RENDER_SCALE_QUALITY, "linear")
 
+	// Set background
 	renderer.SetDrawColor(96, 128, 128, 255)
 	renderer.Clear()
+	renderer.Present()
 
-	pixel := sdl.Rect{
+	// Initialize Pixel
+	pixel = sdl.Rect{
 		X: 0,
 		Y: 0,
 		W: pixelWidth,
 		H: pixelHeight,
 	}
-
-	var k uint8 = 0
-	for i := 0; i < 64; i++ {
-		pixel.X = int32(i * pixelWidth)
-		for j := 0; j < 32; j++ {
-			pixel.Y = int32(j * pixelHeight)
-			renderer.SetDrawColor(255*k, 255*k, 255*k, 255)
-			renderer.FillRect(&pixel)
-			if k == 0 {
-				k = uint8(1)
-			} else {
-				k = uint8(0)
-			}
-		}
-	}
-	renderer.Present()
 
 	// Game Cycles
 	clock := time.NewTicker(time.Millisecond)
@@ -65,14 +65,18 @@ func main() {
 	fps := time.NewTicker(time.Second)
 	frames := 0
 
+	// Game Loop
 	for processEvent() {
 		select {
 		case <-fps.C: // FPS Capture
 			fmt.Println("Frames:", frames)
+
 			frames = 0
 		case <-clock.C: // Emulate Cycle.
+			Chip.Tick()
 		case <-timer.C: // SoundTimer and DelayTimer
 		case <-video.C: // Draw
+			draw(Chip.Video)
 		default:
 		}
 		frames++
@@ -82,11 +86,24 @@ func main() {
 	defer sdl.Quit()
 }
 
+func draw(video [0x800]byte) {
+	var k byte
+	for i := 0; i < 64; i++ {
+		pixel.X = int32(i * pixelWidth)
+		for j := 0; j < 32; j++ {
+			k = video[i+64*j]
+			pixel.Y = int32(j * pixelHeight)
+			renderer.SetDrawColor(255*k, 255*k, 255*k, 255)
+			renderer.FillRect(&pixel)
+		}
+	}
+	renderer.Present()
+}
+
 func processEvent() bool {
 	for event := sdl.PollEvent(); event != nil; event = sdl.PollEvent() {
 		switch event.(type) {
 		case *sdl.QuitEvent:
-			println("Quitting...")
 			return false
 		}
 	}

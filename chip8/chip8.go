@@ -144,8 +144,8 @@ func (c *Chip8) initialize() {
 	}
 }
 
-// EmulateCycle is the Fetch-Decode-Execute routine. It will process one `tick` of instruction.
-func (c *Chip8) EmulateCycle() error {
+// Tick is the Fetch-Decode-Execute routine. It will process one `tick` of instruction.
+func (c *Chip8) Tick() error {
 	currentOpcode := uint16(c.memory[c.pc])<<8 | uint16(c.memory[c.pc+1])
 	opcode := decode(currentOpcode)
 	fmt.Printf("Instruction: %#x ==== Program Count: %d\n", currentOpcode, c.pc)
@@ -227,7 +227,7 @@ func (c *Chip8) EmulateCycle() error {
 
 		case 0x6:
 			// *registerX = *registerY
-			lsb := (*registerX & 1)
+			lsb := *registerX & 1
 			*flagRegister = lsb
 			*registerX >>= 1
 
