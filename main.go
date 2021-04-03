@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"github.com/thescripted/Octal/chip8"
 	"github.com/veandco/go-sdl2/sdl"
+	"log"
 	"time"
 )
 
@@ -21,6 +22,7 @@ var (
 	pixel    sdl.Rect
 	err      error
 )
+
 var KeyMap = map[sdl.Scancode]uint{
 	sdl.SCANCODE_X: 0x0,
 	sdl.SCANCODE_1: 0x1,
@@ -41,11 +43,14 @@ var KeyMap = map[sdl.Scancode]uint{
 }
 
 func main() {
+	// Initialize Logger
+
 	// Initialize Chip
 	Chip = chip8.New()
 	if err = Chip.LoadProgram("./rom/test_opcode.ch8"); err != nil {
 		panic(err)
 	}
+	log.Println("Logging shall begin.")
 
 	// Initialize Graphics
 	if err = sdl.Init(sdl.INIT_VIDEO); err != nil {
@@ -77,20 +82,23 @@ func main() {
 	}
 
 	// Game Cycles
-	clock := time.NewTicker(time.Millisecond)
+	clock := time.NewTicker(time.Second / 20)
+	ticker := make(chan bool, 10)
 	timer := time.NewTicker(time.Second / 60)
 	video := time.NewTicker(time.Second / 60)
 	fps := time.NewTicker(time.Second)
 	frames := 0
 
 	// Game Loop
-	for processEvent() {
+	for processEvent(ticker) {
 		select {
 		case <-fps.C: // FPS Capture
-			fmt.Println("Frames:", frames)
+			// fmt.Println("Frames:", frames)
 
 			frames = 0
-		case <-clock.C: // Emulate Cycle.
+		// case <-clock.C: // Emulate Cycle.
+		case <-ticker:
+		case <-clock.C:
 			Chip.Tick()
 		case <-timer.C: // SoundTimer and DelayTimer
 		case <-video.C: // Draw
@@ -118,7 +126,7 @@ func draw(video [0x800]byte) {
 	renderer.Present()
 }
 
-func processEvent() bool {
+func processEvent(ticker chan bool) bool {
 	for event := sdl.PollEvent(); event != nil; event = sdl.PollEvent() {
 		switch ev := event.(type) {
 		case *sdl.QuitEvent:
@@ -133,6 +141,11 @@ func processEvent() bool {
 				if key, ok := KeyMap[ev.Keysym.Scancode]; ok {
 					fmt.Println("Pressing:", key, ev.Keysym.Scancode)
 					Chip.PressKey(key)
+				}
+
+				if ev.Keysym.Scancode == sdl.SCANCODE_RIGHT {
+					// Step only if needed. Write it one, design it twice. This will be re-factored.
+					ticker <- true
 				}
 				// Should listen to other Keyboard Events here...
 			}

@@ -78,6 +78,7 @@ type opcode struct {
 func New() *Chip8 {
 	chip := &Chip8{}
 	chip.init()
+
 	return chip
 }
 
@@ -116,6 +117,7 @@ func (c *Chip8) Tick() error {
 	registerY := &c.v[opcode.y]
 	flagRegister := &c.v[0xF]
 
+	fmt.Printf("Current Opcode: %#x\n", currentOpcode)
 	switch opcode.instruction {
 	case 0x0000:
 		switch opcode.lowerByte {
@@ -293,7 +295,6 @@ func (c *Chip8) Tick() error {
 			c.memory[c.index] = *registerX / 100
 			c.memory[c.index+1] = (*registerX / 10) % 10
 			c.memory[c.index+2] = *registerX % 10
-			c.index += 2
 
 		case 0x55:
 			// if 0 is provided, just add registerX to memory.
@@ -301,11 +302,11 @@ func (c *Chip8) Tick() error {
 				c.memory[c.index] = *registerX
 			} else {
 				var i uint16
-				for i = 0; i < opcode.x; i++ {
+				for i = 0; i <= opcode.x; i++ {
 					c.memory[c.index+i] = c.v[i]
 				}
 			}
-			// c.index += opcode.x + 1
+			c.index += opcode.x + 1
 
 		case 0x65:
 			// if 0 is provided, just read into registerX from memory.
@@ -313,11 +314,11 @@ func (c *Chip8) Tick() error {
 				*registerX = c.memory[c.index]
 			} else {
 				var i uint16
-				for i = 0; i < opcode.x; i++ {
+				for i = 0; i <= opcode.x; i++ {
 					c.v[i] = c.memory[c.index+i]
 				}
 			}
-			// c.index += opcode.x + 1
+			c.index += opcode.x + 1
 		}
 	}
 
