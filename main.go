@@ -47,7 +47,7 @@ func main() {
 
 	// Initialize Chip
 	Chip = chip8.New()
-	if err = Chip.LoadProgram("./rom/test_opcode.ch8"); err != nil {
+	if err = Chip.LoadProgram("./roms/programs/Chip8 Picture.ch8"); err != nil {
 		panic(err)
 	}
 	log.Println("Logging shall begin.")
@@ -82,7 +82,7 @@ func main() {
 	}
 
 	// Game Cycles
-	clock := time.NewTicker(time.Second / 20)
+	clock := time.NewTicker(time.Millisecond)
 	ticker := make(chan bool, 10)
 	timer := time.NewTicker(time.Second / 60)
 	video := time.NewTicker(time.Second / 60)

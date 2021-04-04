@@ -117,7 +117,6 @@ func (c *Chip8) Tick() error {
 	registerY := &c.v[opcode.y]
 	flagRegister := &c.v[0xF]
 
-	fmt.Printf("Current Opcode: %#x\n", currentOpcode)
 	switch opcode.instruction {
 	case 0x0000:
 		switch opcode.lowerByte {
@@ -189,10 +188,9 @@ func (c *Chip8) Tick() error {
 			*registerX = minuend - subtrahend
 
 		case 0x6:
-			// *registerX = *registerY
-			lsb := *registerX & 1
+			lsb := *registerY & 1
 			*flagRegister = lsb
-			*registerX >>= 1
+			*registerX = *registerY >> 1
 
 		case 0x7:
 			minuend := *registerY
@@ -204,10 +202,9 @@ func (c *Chip8) Tick() error {
 			*registerX = minuend - subtrahend
 
 		case 0xE:
-			// *registerX = *registerY
-			msb := (*registerX & (1 << 7)) >> 7 // sizeof(byte) = 8
+			msb := (*registerY & (1 << 7)) >> 7 // sizeof(byte) = 8
 			*flagRegister = msb
-			*registerX <<= 1
+			*registerX = *registerY << 1
 		}
 
 	case 0x9000:
@@ -276,6 +273,7 @@ func (c *Chip8) Tick() error {
 			c.index = sum
 
 		case 0x0A:
+			fmt.Println("I am being called.")
 			keyPressed := false
 			for i := range c.Key {
 				if c.Key[i] == 1 {
@@ -306,7 +304,7 @@ func (c *Chip8) Tick() error {
 					c.memory[c.index+i] = c.v[i]
 				}
 			}
-			c.index += opcode.x + 1
+			c.index += opcode.x + 1 // AMBIGUOUS !!!
 
 		case 0x65:
 			// if 0 is provided, just read into registerX from memory.
@@ -318,7 +316,7 @@ func (c *Chip8) Tick() error {
 					c.v[i] = c.memory[c.index+i]
 				}
 			}
-			c.index += opcode.x + 1
+			c.index += opcode.x + 1 // AMBIGUOUS !!!
 		}
 	}
 
