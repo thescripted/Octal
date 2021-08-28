@@ -1,11 +1,15 @@
 package main
 
 import (
+	"flag"
 	"fmt"
+	"github.com/manifoldco/promptui"
+	"github.com/pkg/errors"
 	"github.com/thescripted/Octal/chip8"
 	"github.com/veandco/go-sdl2/sdl"
-	"log"
 	"time"
+
+	"io/ioutil"
 )
 
 const (
@@ -42,38 +46,21 @@ var KeyMap = map[sdl.Scancode]uint{
 	sdl.SCANCODE_V: 0xF,
 }
 
+// TODO(ben): Support debug flag
+
 func main() {
-	// Initialize Logger
+	testOpCode := flag.Bool("test-op", false, "Run the opcode test on the emulator.")
 
-	// Initialize Chip
-	Chip = chip8.New()
-	if err = Chip.LoadProgram("./roms/programs/Chip8 Picture.ch8"); err != nil {
-		panic(err)
-	}
-	log.Println("Logging shall begin.")
-
-	// Initialize Graphics
-	if err = sdl.Init(sdl.INIT_VIDEO); err != nil {
-		panic(err)
-	}
-	window, err = sdl.CreateWindow("CHIP - 8", sdl.WINDOWPOS_UNDEFINED, sdl.WINDOWPOS_UNDEFINED, screenWidth, screenHeight, 0)
+	window, renderer, err := initializeSDL()
 	if err != nil {
 		panic(err)
 	}
 	defer window.Destroy()
-	renderer, err = sdl.CreateRenderer(window, -1, sdl.RENDERER_ACCELERATED)
-	if err != nil {
-		panic(err)
-	}
 	defer renderer.Destroy()
-	sdl.SetHint(sdl.HINT_RENDER_SCALE_QUALITY, "linear")
-
-	// Set background
+	defer sdl.Quit()
 	renderer.SetDrawColor(96, 128, 128, 255)
 	renderer.Clear()
 	renderer.Present()
-
-	// Initialize Pixel
 	pixel = sdl.Rect{
 		X: 0,
 		Y: 0,
@@ -81,37 +68,62 @@ func main() {
 		H: pixelHeight,
 	}
 
-	// Game Cycles
+	Chip = chip8.New()
+	program, err := getProgram(testOpCode)
+	if err != nil {
+		panic(err)
+	}
+	err = Chip.LoadProgram(program)
+	if err != nil {
+		panic(err)
+	}
+
 	clock := time.NewTicker(time.Millisecond)
-	ticker := make(chan bool, 10)
 	timer := time.NewTicker(time.Second / 60)
 	video := time.NewTicker(time.Second / 60)
 	fps := time.NewTicker(time.Second)
 	frames := 0
-
-	// Game Loop
-	for processEvent(ticker) {
+	for processEvent() {
 		select {
-		case <-fps.C: // FPS Capture
-			// fmt.Println("Frames:", frames)
-
+		case <-fps.C:
+			fmt.Println("Frames:", frames)
 			frames = 0
-		// case <-clock.C: // Emulate Cycle.
-		case <-ticker:
 		case <-clock.C:
 			Chip.Tick()
-		case <-timer.C: // SoundTimer and DelayTimer
-		case <-video.C: // Draw
+		case <-timer.C:
+		case <-video.C:
 			draw(Chip.Video)
 		default:
 		}
 		frames++
-		sdl.Delay(1) // 1ms Delay
+		sdl.Delay(1)
 	}
-
-	defer sdl.Quit()
 }
 
+func getProgram(testOpCode *bool) (string, error) {
+	romDir := "./rom"
+	files, err := ioutil.ReadDir(romDir)
+	if err != nil {
+		return "", errors.Wrap(err, "Unable to read files from Directory.")
+	}
+	if *testOpCode {
+		return "test_opcode.ch8", nil
+	}
+	var selection []string
+	for _, f := range files {
+		selection = append(selection, f.Name())
+	}
+	prompt := promptui.Select{
+		Label: "Select a game",
+		Items: selection,
+	}
+	_, result, err := prompt.Run()
+	if err != nil {
+		return "", errors.Wrap(err, "Unable to run Prompt.")
+	}
+	return romDir + "/" + result, nil
+
+}
 func draw(video [0x800]byte) {
 	var k byte
 	for i := 0; i < 64; i++ {
@@ -125,8 +137,7 @@ func draw(video [0x800]byte) {
 	}
 	renderer.Present()
 }
-
-func processEvent(ticker chan bool) bool {
+func processEvent() bool {
 	for event := sdl.PollEvent(); event != nil; event = sdl.PollEvent() {
 		switch ev := event.(type) {
 		case *sdl.QuitEvent:
@@ -144,12 +155,25 @@ func processEvent(ticker chan bool) bool {
 				}
 
 				if ev.Keysym.Scancode == sdl.SCANCODE_RIGHT {
-					// Step only if needed. Write it one, design it twice. This will be re-factored.
-					ticker <- true
+					// TODO(ben): Debug Mode
 				}
-				// Should listen to other Keyboard Events here...
 			}
 		}
 	}
 	return true
+}
+func initializeSDL() (*sdl.Window, *sdl.Renderer, error) {
+	if err = sdl.Init(sdl.INIT_VIDEO); err != nil {
+		panic(err)
+	}
+	sdl.SetHint(sdl.HINT_RENDER_SCALE_QUALITY, "linear")
+	window, err = sdl.CreateWindow("CHIP - 8", sdl.WINDOWPOS_UNDEFINED, sdl.WINDOWPOS_UNDEFINED, screenWidth, screenHeight, 0)
+	if err != nil {
+		return window, renderer, errors.Wrap(err, "Create window failed.")
+	}
+	renderer, err = sdl.CreateRenderer(window, -1, sdl.RENDERER_ACCELERATED)
+	if err != nil {
+		return window, renderer, errors.Wrap(err, "Create renderer failed.")
+	}
+	return window, renderer, nil
 }
